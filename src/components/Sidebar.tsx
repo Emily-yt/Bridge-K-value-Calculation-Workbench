@@ -91,7 +91,7 @@ export default function Sidebar({ stepStatus, onStepClick, currentBridge }: Side
     >
       {/* 当前桥梁 */}
       <div className="px-4 py-4 bg-gray-50 border-b border-gray-200">
-        <div className="text-xs">
+        <div className="text-[13px]">
           <span className="text-gray-500">当前桥梁：</span>
           {currentBridge ? (
             <span className="font-semibold text-gray-800">
@@ -107,7 +107,7 @@ export default function Sidebar({ stepStatus, onStepClick, currentBridge }: Side
 
       {/* 步骤导航 */}
       <nav className="flex-1 px-4 py-4 overflow-y-auto">
-        <div className="text-xs font-medium text-gray-500 mb-3">计算步骤</div>
+        <div className="text-[13px] font-medium text-gray-500 mb-3">计算步骤</div>
         
         <div className="relative">
           {/* 背景连接线 */}
@@ -136,7 +136,7 @@ export default function Sidebar({ stepStatus, onStepClick, currentBridge }: Side
                 >
                   {/* 步骤指示点 */}
                   <div className={`
-                    relative z-10 w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-medium shrink-0
+                    relative z-10 w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium shrink-0
                     transition-all duration-200
                     ${isCurrent 
                       ? 'bg-blue-600 text-white shadow-md shadow-blue-200' 
@@ -156,7 +156,7 @@ export default function Sidebar({ stepStatus, onStepClick, currentBridge }: Side
 
                   {/* 步骤名称 */}
                   <span className={`
-                    text-xs whitespace-nowrap transition-colors duration-200
+                    text-[13px] whitespace-nowrap transition-colors duration-200
                     ${isCurrent 
                       ? 'font-semibold text-blue-700' 
                       : isCompleted 
@@ -176,17 +176,14 @@ export default function Sidebar({ stepStatus, onStepClick, currentBridge }: Side
       {/* 进度 */}
       <div className="px-4 py-3 bg-gray-100 border-t border-gray-200 shrink-0">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs text-gray-500">进度</span>
-          <span className="text-xs font-semibold text-gray-700">{Math.round(progress)}%</span>
+          <span className="text-[13px] text-gray-500">进度</span>
+          <span className="text-[13px] font-semibold text-gray-700">{Math.round(progress)}%</span>
         </div>
         <div className="h-1 bg-gray-300 rounded-full overflow-hidden">
           <div
             className="h-full bg-blue-600 rounded-full transition-all duration-300"
             style={{ width: `${progress}%` }}
           />
-        </div>
-        <div className="mt-2 text-[10px] text-gray-400 text-center">
-          步骤 {stepStatus.current} / {STEPS.length}
         </div>
       </div>
 

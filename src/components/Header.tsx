@@ -8,10 +8,10 @@ export default function Header({ onHistoryClick }: HeaderProps) {
   return (
     <header className="h-16 flex items-center justify-between px-6 shrink-0 bg-white border-b border-gray-200">
       <div>
-        <h1 className="text-xl font-bold tracking-tight text-gray-800">
+        <h1 className="text-2xl font-bold tracking-tight text-gray-800">
           桥梁K值计算系统
         </h1>
-        <p className="text-xs text-gray-500">
+        <p className="text-sm text-gray-500">
           Bridge K-value Calculation System
         </p>
       </div>
