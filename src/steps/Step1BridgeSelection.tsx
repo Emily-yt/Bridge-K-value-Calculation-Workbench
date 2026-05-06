@@ -39,19 +39,6 @@ export default function Step1BridgeSelection({ onSelect }: Step1Props) {
 
   return (
     <div className="page-container">
-      {/* 页面标题 */}
-      <div className="page-heading">
-        <div className="page-heading-icon">
-          <Building2 className="w-5 h-5" />
-        </div>
-        <div>
-          <h2 className="page-heading-title">桥梁选择</h2>
-          <p className="page-heading-subtitle">
-            选择需要计算K值的桥梁，支持按桥名、桥号、里程搜索
-          </p>
-        </div>
-      </div>
-
       {/* 搜索框 */}
       <div className="search-box mb-6">
         <Search className="search-box-icon" />
