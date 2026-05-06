@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FileText, Download, Edit3, FileDown, ChevronRight, FileCheck } from 'lucide-react';
+import { FileText, Download, Edit3, FileDown, ChevronRight } from 'lucide-react';
 import type { Bridge } from '../lib/types';
 import type { CalculationParams } from './Step2ParameterVerification';
 
@@ -31,32 +31,6 @@ export default function Step4Report({ bridge, params }: Step4Props) {
 
   return (
     <div className="animate-fadeIn max-w-4xl">
-      {/* 标题 */}
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
-          <div 
-            className="w-10 h-10 rounded-lg flex items-center justify-center"
-            style={{ backgroundColor: 'var(--primary-100)' }}
-          >
-            <FileCheck className="w-5 h-5" style={{ color: 'var(--primary-600)' }} />
-          </div>
-          <div>
-            <h2 
-              className="text-xl font-semibold"
-              style={{ color: 'var(--gray-800)' }}
-            >
-              检测报告生成器
-            </h2>
-            <p 
-              className="text-sm"
-              style={{ color: 'var(--gray-500)' }}
-            >
-              结构化报告预览与导出
-            </p>
-          </div>
-        </div>
-      </div>
-
       <div className="flex flex-col lg:flex-row gap-4 min-h-[400px]">
         {/* 报告目录 */}
         <div 

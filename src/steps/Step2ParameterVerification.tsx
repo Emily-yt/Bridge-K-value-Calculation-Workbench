@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { RotateCcw, Play, ChevronDown, ChevronUp, Zap, Layers, Shield, Cog, Sliders } from 'lucide-react';
+import { RotateCcw, Play, ChevronDown, ChevronUp, Zap, Layers, Shield, Cog } from 'lucide-react';
 import type { Bridge } from '../lib/types';
 import { DRAWING_OPTIONS, LOAD_TYPE_OPTIONS, MATERIAL_MAP } from '../lib/types';
 
@@ -89,32 +89,6 @@ export default function Step2ParameterVerification({ bridge, onCalculate }: Step
 
   return (
     <div className="animate-fadeIn max-w-4xl">
-      {/* 标题 */}
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
-          <div 
-            className="w-10 h-10 rounded-lg flex items-center justify-center"
-            style={{ backgroundColor: 'var(--primary-100)' }}
-          >
-            <Sliders className="w-5 h-5" style={{ color: 'var(--primary-600)' }} />
-          </div>
-          <div>
-            <h2 
-              className="text-xl font-semibold"
-              style={{ color: 'var(--gray-800)' }}
-            >
-              参数校核
-            </h2>
-            <p 
-              className="text-sm"
-              style={{ color: 'var(--gray-500)' }}
-            >
-              确认并微调计算参数，系统已根据桥梁信息自动匹配默认值
-            </p>
-          </div>
-        </div>
-      </div>
-
       <div className="space-y-4">
         {/* 结构与荷载 */}
         <div className={sectionClass} style={sectionStyle}>

@@ -49,32 +49,6 @@ export default function Step5History({ onViewCalculation }: Step5Props) {
 
   return (
     <div className="animate-fadeIn">
-      {/* 标题区域 - 仅在弹窗中不显示，因为弹窗已经有标题了 */}
-      <div className="mb-6">
-        <div className="flex items-center gap-3 mb-2">
-          <div 
-            className="w-10 h-10 rounded-lg flex items-center justify-center"
-            style={{ backgroundColor: 'var(--primary-100)' }}
-          >
-            <History className="w-5 h-5" style={{ color: 'var(--primary-600)' }} />
-          </div>
-          <div>
-            <h2 
-              className="text-xl font-semibold"
-              style={{ color: 'var(--gray-800)' }}
-            >
-              历史计算记录
-            </h2>
-            <p 
-              className="text-sm"
-              style={{ color: 'var(--gray-500)' }}
-            >
-              查看过往K值计算记录，支持查看详情与批量操作
-            </p>
-          </div>
-        </div>
-      </div>
-
       {/* 搜索栏 */}
       <div className="flex items-center gap-3 mb-4">
         <div className="relative flex-1 max-w-sm">
