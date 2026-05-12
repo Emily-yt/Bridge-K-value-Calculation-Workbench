@@ -1,0 +1,78 @@
+[
+  {
+    "id": "BRG001",
+    "bridgeName": "清水河特大桥",
+    "lineName": "朔黄",
+    "bridgeNo": "59#",
+    "centerMileage": "K149+837",
+    "spanType": "1-24m/15-32m-预应力钢筋混凝土T形",
+    "spanCount": 16,
+    "spans": [
+      {"index": 1, "beamLength": 32.6, "beamHeight": 2.64, "beamCenterDist": 1.8, "beamType": "专桥2059"},
+      {"index": 2, "beamLength": 32.6, "beamHeight": 2.64, "beamCenterDist": 1.8, "beamType": "专桥2059"},
+      {"index": 3, "beamLength": 32.6, "beamHeight": 2.64, "beamCenterDist": 1.8, "beamType": "专桥2059"},
+      {"index": 4, "beamLength": 32.6, "beamHeight": 2.64, "beamCenterDist": 1.8, "beamType": "专桥2059"},
+      {"index": 5, "beamLength": 32.6, "beamHeight": 2.64, "beamCenterDist": 1.8, "beamType": "专桥2059"},
+      {"index": 6, "beamLength": 32.6, "beamHeight": 2.64, "beamCenterDist": 1.8, "beamType": "专桥2059"},
+      {"index": 7, "beamLength": 32.6, "beamHeight": 2.64, "beamCenterDist": 1.8, "beamType": "专桥2059"},
+      {"index": 8, "beamLength": 32.6, "beamHeight": 2.64, "beamCenterDist": 1.8, "beamType": "专桥2059"},
+      {"index": 9, "beamLength": 32.6, "beamHeight": 2.64, "beamCenterDist": 1.8, "beamType": "专桥2059"},
+      {"index": 10, "beamLength": 32.6, "beamHeight": 2.64, "beamCenterDist": 1.8, "beamType": "专桥2059"},
+      {"index": 11, "beamLength": 32.6, "beamHeight": 2.64, "beamCenterDist": 1.8, "beamType": "专桥2059"},
+      {"index": 12, "beamLength": 32.6, "beamHeight": 2.64, "beamCenterDist": 1.8, "beamType": "专桥2059"},
+      {"index": 13, "beamLength": 32.6, "beamHeight": 2.64, "beamCenterDist": 1.8, "beamType": "专桥2059"},
+      {"index": 14, "beamLength": 32.6, "beamHeight": 2.64, "beamCenterDist": 1.8, "beamType": "专桥2059"},
+      {"index": 15, "beamLength": 32.6, "beamHeight": 2.64, "beamCenterDist": 1.8, "beamType": "专桥2059"},
+      {"index": 16, "beamLength": 32.6, "beamHeight": 2.64, "beamCenterDist": 1.8, "beamType": "专桥2059"}
+    ],
+    "buildYear": 1999,
+    "operationStatus": "运营中"
+  },
+  {
+    "id": "BRG002",
+    "bridgeName": "庄里滹沱河大桥",
+    "lineName": "朔黄",
+    "bridgeNo": "66#",
+    "centerMileage": "K160+338",
+    "spanType": "1-24m/4-32m/2-40m/3-72m-预应力钢筋混凝土T形",
+    "spanCount": 10,
+    "spans": [
+      {"index": 1, "beamLength": 24.6, "beamHeight": 2.24, "beamCenterDist": 1.8, "beamType": "专桥2059"},
+      {"index": 2, "beamLength": 32.6, "beamHeight": 2.64, "beamCenterDist": 1.8, "beamType": "专桥2059"},
+      {"index": 3, "beamLength": 32.6, "beamHeight": 2.64, "beamCenterDist": 1.8, "beamType": "专桥2059"},
+      {"index": 4, "beamLength": 32.6, "beamHeight": 2.64, "beamCenterDist": 1.8, "beamType": "专桥2059"},
+      {"index": 5, "beamLength": 32.6, "beamHeight": 2.64, "beamCenterDist": 1.8, "beamType": "专桥2059"},
+      {"index": 6, "beamLength": 40.6, "beamHeight": 2.64, "beamCenterDist": 1.8, "beamType": "专桥2059"},
+      {"index": 7, "beamLength": 72, "beamHeight": 0, "beamCenterDist": 1.8, "beamType": "专桥2059"},
+      {"index": 8, "beamLength": 72, "beamHeight": 0, "beamCenterDist": 1.8, "beamType": "专桥2059"},
+      {"index": 9, "beamLength": 72, "beamHeight": 0, "beamCenterDist": 1.8, "beamType": "专桥2059"},
+      {"index": 10, "beamLength": 40.6, "beamHeight": 0, "beamCenterDist": 1.8, "beamType": "专桥2059"}
+    ],
+    "buildYear": 1999,
+    "operationStatus": "运营中"
+  },
+  {
+    "id": "BRG003",
+    "bridgeName": "滴流磴滹沱河大桥",
+    "lineName": "朔黄",
+    "bridgeNo": "68#",
+    "centerMileage": "K163+993",
+    "spanType": "4-20m/4-32m/2-50m/1-80m-预应力钢筋混凝土T形",
+    "spanCount": 11,
+    "spans": [
+      {"index": 1, "beamLength": 20.6, "beamHeight": 1.5, "beamCenterDist": 1.8, "beamType": "专桥(93)2018"},
+      {"index": 2, "beamLength": 20.6, "beamHeight": 1.5, "beamCenterDist": 1.8, "beamType": "专桥(93)2018"},
+      {"index": 3, "beamLength": 32.6, "beamHeight": 2.64, "beamCenterDist": 1.8, "beamType": "专桥2059"},
+      {"index": 4, "beamLength": 32.6, "beamHeight": 2.64, "beamCenterDist": 1.8, "beamType": "专桥2059"},
+      {"index": 5, "beamLength": 50.6, "beamHeight": 0, "beamCenterDist": 1.8, "beamType": "朔黄施桥-68"},
+      {"index": 6, "beamLength": 80, "beamHeight": 0, "beamCenterDist": 1.8, "beamType": "朔黄施桥-68"},
+      {"index": 7, "beamLength": 50.6, "beamHeight": 0, "beamCenterDist": 1.8, "beamType": "朔黄施桥-68"},
+      {"index": 8, "beamLength": 32.6, "beamHeight": 2.64, "beamCenterDist": 1.8, "beamType": "专桥2059"},
+      {"index": 9, "beamLength": 32.6, "beamHeight": 2.64, "beamCenterDist": 1.8, "beamType": "专桥2059"},
+      {"index": 10, "beamLength": 20.6, "beamHeight": 1.5, "beamCenterDist": 1.8, "beamType": "专桥(93)2018"},
+      {"index": 11, "beamLength": 20.6, "beamHeight": 1.5, "beamCenterDist": 1.8, "beamType": "专桥(93)2018"}
+    ],
+    "buildYear": 1999,
+    "operationStatus": "运营中"
+  }
+]

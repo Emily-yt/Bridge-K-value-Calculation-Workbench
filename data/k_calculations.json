@@ -1,0 +1,64 @@
+{
+  "version": "1.0",
+  "calculations": [
+    {
+      "id": "CALC1778604405331idkzcy",
+      "bridgeId": "BRG001",
+      "spanIndex": 4,
+      "spanLength": 32,
+      "beamType": "专桥2059",
+      "createTime": "2026-05-13T00:46:45.331+08:00",
+      "creator": "当前用户",
+      "creatorId": null,
+      "input": {
+        "beamPosition": "直线梁",
+        "curveRadius": null,
+        "eccentricityE": 70,
+        "ballastThicknessT": 5,
+        "impactFactor": 1.1935,
+        "damageFactors": {
+          "z1m": 1,
+          "z1q": 1,
+          "z2m": 1,
+          "z2q": 1,
+          "z3h": 1,
+          "z3y": 1,
+          "z4y": 1
+        }
+      },
+      "intermediate": {
+        "etaM": 1.042,
+        "momentM": 17019.071,
+        "fixedParams": {
+          "mq0": 4248,
+          "mq1": 2367.2,
+          "mq2": 811.9,
+          "mq3": 497.7,
+          "mL": 7512.8,
+          "mp": 29752,
+          "etaM": 1.042,
+          "etaL8Q": 1.04,
+          "calcSpan": 32,
+          "Kw": 2,
+          "concrete": {
+            "f_ct": 3.02,
+            "f_c": 32.1
+          }
+        }
+      },
+      "output": {
+        "k1": 0.7706,
+        "k2": 3,
+        "k3": 3,
+        "k4": 3,
+        "kFinal": 0.7706,
+        "calcTime": "2026-05-13T00:46:45.331+08:00"
+      },
+      "report": {
+        "generated": false,
+        "filePath": null,
+        "generateTime": null
+      }
+    }
+  ]
+}

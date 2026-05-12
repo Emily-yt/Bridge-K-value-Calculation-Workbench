@@ -1,69 +1,40 @@
-import { Check } from 'lucide-react';
-import type { StepId } from '../lib/types';
-
-const STEPS: { id: StepId; label: string }[] = [
-  { id: 1, label: '选桥' },
-  { id: 2, label: '参数' },
-  { id: 3, label: '结果' },
-  { id: 4, label: '报告' },
-];
+import { LayoutDashboard, Building2, BarChart3 } from 'lucide-react';
+import type { ViewId } from './Sidebar';
 
 interface MobileNavProps {
-  currentStep: StepId;
-  completedSteps: StepId[];
-  onStepClick: (step: StepId) => void;
+  currentView: ViewId;
+  onViewChange: (view: ViewId) => void;
 }
 
-export default function MobileNav({ currentStep, completedSteps, onStepClick }: MobileNavProps) {
-  return (
-    <div 
-      className="lg:hidden flex items-center justify-center gap-1 px-4 py-3"
-      style={{ 
-        backgroundColor: 'var(--gray-0)',
-        borderBottom: '1px solid var(--gray-200)'
-      }}
-    >
-      {STEPS.map((step, i) => {
-        const isCompleted = completedSteps.includes(step.id);
-        const isCurrent = step.id === currentStep;
-        const nextAvailable = (Math.max(...completedSteps, 0) + 1) as StepId;
-        const isClickable = isCompleted || isCurrent || step.id <= nextAvailable;
+const MOBILE_ITEMS: { id: ViewId; label: string; icon: typeof LayoutDashboard }[] = [
+  { id: 'dashboard', label: '首页', icon: LayoutDashboard },
+  { id: 'bridges', label: '桥梁', icon: Building2 },
+  { id: 'statistics', label: '统计', icon: BarChart3 },
+];
 
-        return (
-          <div key={step.id} className="flex items-center">
+export default function MobileNav({ currentView, onViewChange }: MobileNavProps) {
+  return (
+    <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-30">
+      <div className="flex items-center justify-around py-2">
+        {MOBILE_ITEMS.map((item) => {
+          const Icon = item.icon;
+          const isActive = currentView === item.id;
+          
+          return (
             <button
-              onClick={() => isClickable && onStepClick(step.id)}
-              disabled={!isClickable}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200"
-              style={{
-                backgroundColor: isCurrent 
-                  ? 'var(--primary-600)' 
-                  : isCompleted 
-                  ? 'rgba(16, 185, 129, 0.1)' 
-                  : 'var(--gray-100)',
-                color: isCurrent 
-                  ? 'white' 
-                  : isCompleted 
-                  ? 'var(--success)' 
-                  : 'var(--gray-500)',
-                boxShadow: isCurrent ? '0 2px 6px rgba(37, 99, 235, 0.3)' : 'none',
-                cursor: isClickable ? 'pointer' : 'not-allowed',
-              }}
+              key={item.id}
+              onClick={() => onViewChange(item.id)}
+              className={`
+                flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-all
+                ${isActive ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700'}
+              `}
             >
-              {isCompleted ? <Check className="w-3 h-3" /> : step.id}
-              <span>{step.label}</span>
+              <Icon className={`w-5 h-5 ${isActive ? 'text-blue-600' : 'text-gray-500'}`} />
+              <span className="text-[11px] font-medium">{item.label}</span>
             </button>
-            {i < STEPS.length - 1 && (
-              <div 
-                className="w-4 h-px mx-1" 
-                style={{ 
-                  backgroundColor: isCompleted ? 'var(--success)' : 'var(--gray-300)' 
-                }}
-              />
-            )}
-          </div>
-        );
-      })}
-    </div>
+          );
+        })}
+      </div>
+    </nav>
   );
 }

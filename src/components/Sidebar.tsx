@@ -1,33 +1,36 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import type { StepId, StepStatus } from '../lib/types';
+import { LayoutDashboard, Building2, BarChart3, FileText, Settings } from 'lucide-react';
 
-const STEPS: { id: StepId; label: string }[] = [
-  { id: 1, label: '选择桥梁' },
-  { id: 2, label: '参数校核' },
-  { id: 3, label: '计算结果' },
-  { id: 4, label: '报告预览' },
+export type ViewId = 'dashboard' | 'bridges' | 'statistics' | 'templates' | 'users';
+
+const MENU_ITEMS: { id: ViewId; label: string; icon: typeof LayoutDashboard }[] = [
+  { id: 'dashboard', label: '首页', icon: LayoutDashboard },
+  { id: 'bridges', label: '桥梁列表', icon: Building2 },
+  { id: 'statistics', label: '统计分析', icon: BarChart3 },
+  { id: 'templates', label: '模板管理', icon: FileText },
+];
+
+const SYSTEM_ITEMS: { id: ViewId; label: string; icon: typeof LayoutDashboard }[] = [
+  { id: 'users', label: '系统设置', icon: Settings },
 ];
 
 const MIN_WIDTH = 180;
 const MAX_WIDTH = 400;
-const DEFAULT_WIDTH = 240;
+const DEFAULT_WIDTH = 220;
 const STORAGE_KEY = 'sidebar-width';
 
 interface SidebarProps {
-  stepStatus: StepStatus;
-  onStepClick: (step: StepId) => void;
-  currentBridge: string | null;
+  currentView: ViewId;
+  onViewChange: (view: ViewId) => void;
 }
 
-export default function Sidebar({ stepStatus, onStepClick, currentBridge }: SidebarProps) {
-  const progress = (stepStatus.completed.length / STEPS.length) * 100;
+export default function Sidebar({ currentView, onViewChange }: SidebarProps) {
   const [width, setWidth] = useState(DEFAULT_WIDTH);
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLElement>(null);
   const startXRef = useRef(0);
   const startWidthRef = useRef(DEFAULT_WIDTH);
 
-  // 从 localStorage 读取保存的宽度
   useEffect(() => {
     const savedWidth = localStorage.getItem(STORAGE_KEY);
     if (savedWidth) {
@@ -38,12 +41,10 @@ export default function Sidebar({ stepStatus, onStepClick, currentBridge }: Side
     }
   }, []);
 
-  // 保存宽度到 localStorage
   const saveWidth = useCallback((newWidth: number) => {
     localStorage.setItem(STORAGE_KEY, newWidth.toString());
   }, []);
 
-  // 开始拖拽调整
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     setIsResizing(true);
@@ -53,11 +54,9 @@ export default function Sidebar({ stepStatus, onStepClick, currentBridge }: Side
     document.body.style.userSelect = 'none';
   }, [width]);
 
-  // 拖拽中
   useEffect(() => {
     const handleResizeMove = (e: MouseEvent) => {
       if (!isResizing) return;
-      
       const delta = e.clientX - startXRef.current;
       const newWidth = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, startWidthRef.current + delta));
       setWidth(newWidth);
@@ -83,111 +82,54 @@ export default function Sidebar({ stepStatus, onStepClick, currentBridge }: Side
     };
   }, [isResizing, width, saveWidth]);
 
+  const MenuItem = ({ item }: { item: typeof MENU_ITEMS[0] }) => {
+    const Icon = item.icon;
+    const isActive = currentView === item.id;
+    
+    return (
+      <button
+        onClick={() => onViewChange(item.id)}
+        className={`
+          w-full flex items-center gap-3 px-3 py-2.5 text-left rounded-lg transition-all duration-200
+          ${isActive 
+            ? 'bg-blue-50 text-blue-700 font-medium' 
+            : 'text-gray-600 hover:bg-gray-100'
+          }
+        `}
+      >
+        <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-blue-600' : 'text-gray-500'}`} />
+        <span className="text-[14px]">{item.label}</span>
+        {isActive && (
+          <div className="ml-auto w-1 h-5 bg-blue-600 rounded-full" />
+        )}
+      </button>
+    );
+  };
+
   return (
     <aside 
       ref={sidebarRef}
-      className="hidden lg:flex flex-col shrink-0 bg-gray-50 border-r border-gray-200 relative"
+      className="hidden lg:flex flex-col shrink-0 bg-white border-r border-gray-200 relative"
       style={{ width: `${width}px` }}
     >
-      {/* 当前桥梁 */}
-      <div className="px-4 py-4 bg-gray-50 border-b border-gray-200">
-        <div className="text-[13px]">
-          <span className="text-gray-500">当前桥梁：</span>
-          {currentBridge ? (
-            <span className="font-semibold text-gray-800">
-              {currentBridge}
-            </span>
-          ) : (
-            <span className="text-gray-400">
-              暂未选择
-            </span>
-          )}
+      <div className="p-4 flex-1 flex flex-col min-h-0">
+        <nav className="space-y-1">
+          {MENU_ITEMS.map((item) => (
+            <MenuItem key={item.id} item={item} />
+          ))}
+        </nav>
+
+        <div className="flex-1" />
+
+        <div className="pt-4 border-t border-gray-200">
+          <nav className="space-y-1">
+            {SYSTEM_ITEMS.map((item) => (
+              <MenuItem key={item.id} item={item} />
+            ))}
+          </nav>
         </div>
       </div>
 
-      {/* 步骤导航 */}
-      <nav className="flex-1 px-4 py-4 overflow-y-auto">
-        <div className="text-[13px] font-medium text-gray-500 mb-3">计算步骤</div>
-        
-        <div className="relative">
-          {/* 背景连接线 */}
-          <div className="absolute left-[11px] top-2 bottom-2 w-0.5 bg-gray-200" />
-          
-          <div className="space-y-1">
-            {STEPS.map((step) => {
-              const isCurrent = step.id === stepStatus.current;
-              const isCompleted = stepStatus.completed.includes(step.id);
-              const isClickable = isCompleted || step.id <= stepStatus.current;
-
-              return (
-                <button
-                  key={step.id}
-                  onClick={() => isClickable && onStepClick(step.id)}
-                  disabled={!isClickable}
-                  className={`
-                    w-full flex items-center gap-3 py-2 px-2 -ml-2 text-left rounded-lg transition-all duration-200
-                    ${isCurrent 
-                      ? 'bg-blue-50' 
-                      : isClickable 
-                        ? 'hover:bg-gray-100 cursor-pointer' 
-                        : 'cursor-not-allowed'
-                    }
-                  `}
-                >
-                  {/* 步骤指示点 */}
-                  <div className={`
-                    relative z-10 w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium shrink-0
-                    transition-all duration-200
-                    ${isCurrent 
-                      ? 'bg-blue-600 text-white shadow-md shadow-blue-200' 
-                      : isCompleted 
-                        ? 'bg-emerald-500 text-white' 
-                        : 'bg-gray-200 text-gray-400'
-                    }
-                  `}>
-                    {isCompleted && !isCurrent ? (
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                      </svg>
-                    ) : (
-                      step.id
-                    )}
-                  </div>
-
-                  {/* 步骤名称 */}
-                  <span className={`
-                    text-[13px] whitespace-nowrap transition-colors duration-200
-                    ${isCurrent 
-                      ? 'font-semibold text-blue-700' 
-                      : isCompleted 
-                        ? 'font-medium text-gray-700' 
-                        : 'text-gray-400'
-                    }
-                  `}>
-                    {step.label}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </nav>
-
-      {/* 进度 */}
-      <div className="px-4 py-3 bg-gray-100 border-t border-gray-200 shrink-0">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-[13px] text-gray-500">进度</span>
-          <span className="text-[13px] font-semibold text-gray-700">{Math.round(progress)}%</span>
-        </div>
-        <div className="h-1 bg-gray-300 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-blue-600 rounded-full transition-all duration-300"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-      </div>
-
-      {/* 拖拽调整宽度的手柄 */}
       <div
         className={`
           absolute right-0 top-0 bottom-0 w-1 cursor-col-resize z-10
@@ -197,7 +139,6 @@ export default function Sidebar({ stepStatus, onStepClick, currentBridge }: Side
         onMouseDown={handleResizeStart}
         title="拖动调整宽度"
       >
-        {/* 视觉指示条 */}
         <div className={`
           absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
           w-0.5 h-8 rounded-full transition-colors

@@ -1,67 +1,127 @@
-export interface Bridge {
-  id: string;
-  name: string;
-  line: string;
-  direction: string;
-  mileage: string;
-  span_type: string;
-  span_count: number;
-  year_built: number | null;
-  drawing_number: string;
-  created_at: string;
+/** 单孔梁档案（与 data/bridges.json 一致） */
+export interface BeamSpan {
+  index: number;
+  beamLength: number;
+  beamHeight: number;
+  beamCenterDist: number;
+  beamType: string;
 }
 
-export interface Calculation {
+/** 桥梁基础信息 */
+export interface Bridge {
   id: string;
-  bridge_id: string;
-  user_id: string;
-  load_case: string;
-  load_type: string;
-  eccentricity: number;
-  ballast_thickness: number;
-  secondary_dead_load: number;
-  capacity_coefficient: number;
-  material_grade: string;
-  elastic_modulus: number | null;
-  poisson_ratio: number | null;
-  thermal_coeff: number | null;
-  strength: number | null;
-  k_value_1985: number | null;
-  k_value_2017_no_tension: number | null;
-  k_value_2017_no_crack: number | null;
-  controlling_k: number | null;
-  controlling_code: string;
-  risk_notes: string[];
-  created_at: string;
+  bridgeName: string;
+  lineName: string;
+  bridgeNo: string;
+  centerMileage: string;
+  spanType: string;
+  spanCount: number;
+  spans: BeamSpan[];
+  buildYear: number;
+  operationStatus: string;
+}
+
+/** 损伤修正系数（与后端 input.damageFactors 一致） */
+export interface DamageFactors {
+  z1m: number;
+  z1q: number;
+  z2m: number;
+  z2q: number;
+  z3h: number;
+  z3y: number;
+  z4y: number;
+}
+
+/** K值计算输入（POST /api/calculations 的 input） */
+export interface KValueInput {
+  beamPosition: string;
+  curveRadius: number | null;
+  eccentricityE: number;
+  ballastThicknessT: number;
+  impactFactor: number;
+  damageFactors: DamageFactors;
+}
+
+/** 中间结果 */
+export interface KValueIntermediate {
+  etaM: number;
+  momentM: number;
+  fixedParams: Record<string, unknown>;
+}
+
+/** 计算输出（不含主力弯矩，弯矩在 intermediate） */
+export interface KValueOutput {
+  k1: number;
+  k2: number;
+  k3: number;
+  k4: number;
+  kFinal: number;
+  calcTime: string;
+}
+
+export interface CalculationReport {
+  generated: boolean;
+  filePath: string | null;
+  generateTime: string | null;
+  htmlContent?: string;
+  notes?: string;
+  reviewer?: string;
+}
+
+/** K值计算记录（与 data/k_calculations.json 中单条结构一致） */
+export interface KValueCalculation {
+  id: string;
+  bridgeId: string;
+  spanIndex: number;
+  spanLength: number;
+  beamType: string;
+  createTime: string;
+  creator: string;
+  creatorId?: string | null;
+  input: KValueInput;
+  intermediate: KValueIntermediate;
+  output: KValueOutput;
+  report?: CalculationReport;
   bridge?: Bridge;
 }
 
-export type StepId = 1 | 2 | 3 | 4;
-
-export interface StepStatus {
-  current: StepId;
-  completed: StepId[];
+/** 首页卡片显示控制 */
+export interface CardVisibility {
+  totalBridges: boolean;
+  pendingCalculation: boolean;
+  lowKValue: boolean;
+  monthlyExpire: boolean;
 }
 
-export const DRAWING_OPTIONS = [
-  '专桥2059',
-  '专桥2060',
-  '专桥2061',
-  '专桥2062',
-  '专桥2063',
-];
+/** 预警设置 */
+export interface WarningSettings {
+  expireReminderDays: number;
+  kValueThreshold: number;
+  inspectionIntervalDays: number;
+}
 
-export const LOAD_TYPE_OPTIONS = [
-  '场80',
-  '场60',
-  '场40',
-  '场20',
-];
+/** 报告模板设置 */
+export interface ReportTemplate {
+  unitName: string;
+  reportPrefix: string;
+  defaultReviewer: string;
+  defaultCalculator: string;
+}
 
-export const MATERIAL_MAP: Record<string, { grade: string; E: number; v: number; alpha: number; strength: number }> = {
-  '专桥2059': { grade: 'C48', E: 34500, v: 0.2, alpha: 1e-5, strength: 32.1 },
-  '专桥2060': { grade: 'C50', E: 35500, v: 0.2, alpha: 1e-5, strength: 33.5 },
-  '专桥2061': { grade: 'C55', E: 37000, v: 0.2, alpha: 1e-5, strength: 35.2 },
-  '专桥2062': { grade: 'C45', E: 33500, v: 0.2, alpha: 1e-5, strength: 30.8 },
-  '专桥2063': { grade: 'C40', E: 32500, v: 0.2, alpha: 1e-5, strength: 28.5 },
-};
+/** 用户角色 */
+export type UserRole = 'calculator' | 'admin';
+
+/** 用户 */
+export interface User {
+  id: string;
+  username: string;
+  role: UserRole;
+  enabled: boolean;
+}
+
+/** 系统设置 */
+export interface SystemSettings {
+  warningSettings: WarningSettings;
+  reportTemplate: ReportTemplate;
+  users: User[];
+}
