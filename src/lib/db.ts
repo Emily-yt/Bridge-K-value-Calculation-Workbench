@@ -3,13 +3,29 @@ import type { Bridge, KValueCalculation, KValueInput } from './types';
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
 async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
-    ...init,
-  });
-  const json = await res.json().catch(() => ({}));
+  let res;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
+      ...init,
+    });
+  } catch (e) {
+    throw new Error(`无法连接到服务器，请检查后端服务是否运行中。(${(e as Error).message})`);
+  }
+
+  const text = await res.text();
+  let json: Record<string, unknown>;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new Error(`服务器返回了非 JSON 数据 (HTTP ${res.status})，请检查 VITE_API_BASE_URL 配置是否正确。`);
+  }
+
   if (!res.ok || (typeof json.code === 'number' && json.code !== 0)) {
-    throw new Error(json.message || `请求失败 (${res.status})`);
+    throw new Error(json.message as string || `请求失败 (${res.status})`);
+  }
+  if (json.data === undefined) {
+    throw new Error(`服务器响应中缺少 data 字段`);
   }
   return json.data as T;
 }
