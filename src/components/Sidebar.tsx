@@ -1,13 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { LayoutDashboard, Building2, BarChart3, FileText, Settings } from 'lucide-react';
+import { LayoutDashboard, Calculator, BarChart3, Settings } from 'lucide-react';
 
-export type ViewId = 'dashboard' | 'bridges' | 'statistics' | 'templates' | 'users';
+export type ViewId = 'dashboard' | 'bridges' | 'statistics' | 'users';
 
 const MENU_ITEMS: { id: ViewId; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'dashboard', label: '首页', icon: LayoutDashboard },
-  { id: 'bridges', label: '桥梁列表', icon: Building2 },
+  { id: 'bridges', label: 'K值计算', icon: Calculator },
   { id: 'statistics', label: '统计分析', icon: BarChart3 },
-  { id: 'templates', label: '模板管理', icon: FileText },
 ];
 
 const SYSTEM_ITEMS: { id: ViewId; label: string; icon: typeof LayoutDashboard }[] = [

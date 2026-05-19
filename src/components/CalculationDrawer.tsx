@@ -1,10 +1,36 @@
 import { useState, useEffect } from 'react';
 import { X, RotateCcw, Play, ChevronDown, ChevronUp, Calculator, CheckCircle, AlertTriangle, XCircle, FileText, Save } from 'lucide-react';
-import type { Bridge, KValueCalculation } from '../lib/types';
+import type { Bridge, KValueCalculation, BeamSpan } from '../lib/types';
 import { calculateKValue, saveKValueResult } from '../lib/db';
+
+// 验证桥孔是否支持计算
+function isSpanSupported(span: BeamSpan): boolean {
+  return span.beamType === '专桥2059' && span.beamLength === 32.6;
+}
+
+// Toast 提示组件
+function Toast({ message, type, onClose }: { message: string; type: 'warning' | 'error' | 'info'; onClose: () => void }) {
+  useEffect(() => {
+    const timer = setTimeout(onClose, 3000);
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  const bgColor = type === 'warning' ? 'bg-amber-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500';
+
+  return (
+    <div className={`fixed top-4 left-1/2 transform -translate-x-1/2 z-[60] ${bgColor} text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 animate-in fade-in slide-in-from-top-2`}>
+      <AlertTriangle className="w-4 h-4" />
+      <span className="text-sm font-medium">{message}</span>
+      <button onClick={onClose} className="ml-2 hover:opacity-80">
+        <X className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}
 
 interface CalculationDrawerProps {
   bridge: Bridge | null;
+  initialSpanIndex?: number;
   isOpen: boolean;
   onClose: () => void;
   onComplete: () => void;
@@ -49,7 +75,7 @@ const colorMap = {
   },
 };
 
-export default function CalculationDrawer({ bridge, isOpen, onClose, onComplete, onOpenReport }: CalculationDrawerProps) {
+export default function CalculationDrawer({ bridge, initialSpanIndex, isOpen, onClose, onComplete, onOpenReport }: CalculationDrawerProps) {
   const [spanIndex, setSpanIndex] = useState(1);
   const [beamPosition, setBeamPosition] = useState('直线梁');
   const [curveRadius, setCurveRadius] = useState<number | null>(null);
@@ -70,12 +96,19 @@ export default function CalculationDrawer({ bridge, isOpen, onClose, onComplete,
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<KValueCalculation | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: 'warning' | 'error' | 'info' } | null>(null);
 
   useEffect(() => {
     if (bridge?.spans?.length) {
-      setSpanIndex(bridge.spans[0].index);
+      // 如果传入了初始孔索引，优先使用；否则找到第一个支持的桥孔
+      if (initialSpanIndex && bridge.spans.some(s => s.index === initialSpanIndex)) {
+        setSpanIndex(initialSpanIndex);
+      } else {
+        const firstSupported = bridge.spans.find(isSpanSupported);
+        setSpanIndex(firstSupported?.index ?? bridge.spans[0].index);
+      }
     }
-  }, [bridge?.id]);
+  }, [bridge?.id, bridge?.spans, initialSpanIndex]);
 
   useEffect(() => {
     if (isOpen) {
@@ -120,6 +153,16 @@ export default function CalculationDrawer({ bridge, isOpen, onClose, onComplete,
     // 参数验证
     if (beamPosition !== '直线梁' && (curveRadius == null || curveRadius <= 0)) {
       setError('曲线梁需填写有效的曲线半径 R（m）');
+      return;
+    }
+
+    // 桥孔类型验证
+    const selectedSpan = spans.find(s => s.index === spanIndex);
+    if (selectedSpan && !isSpanSupported(selectedSpan)) {
+      setToast({
+        message: `当前暂不支持 ${selectedSpan.beamType} 梁长 ${selectedSpan.beamLength}m 的桥孔计算`,
+        type: 'warning'
+      });
       return;
     }
 
@@ -240,11 +283,15 @@ export default function CalculationDrawer({ bridge, isOpen, onClose, onComplete,
   if (!isOpen || !bridge) return null;
 
   const spans = bridge.spans ?? [];
+
+  // 获取当前选中的桥孔
+  const currentSpan = spans.find(s => s.index === spanIndex);
   const kStatus = result ? getKValueStatus(result.output.kFinal) : null;
   const colors = kStatus ? colorMap[kStatus.color as keyof typeof colorMap] : null;
 
   return (
     <>
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       <div className="fixed inset-0 bg-black/30 z-40 transition-opacity" onClick={handleClose} />
       <div className="fixed inset-y-0 right-0 w-full max-w-xl bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-out flex flex-col">
         {/* Header */}
@@ -334,13 +381,24 @@ export default function CalculationDrawer({ bridge, isOpen, onClose, onComplete,
                   <FormField label="孔序号">
                     <select
                       value={spanIndex}
-                      onChange={(e) => setSpanIndex(Number(e.target.value))}
+                      onChange={(e) => {
+                        const newIndex = Number(e.target.value);
+                        const selectedSpan = spans.find(s => s.index === newIndex);
+                        if (selectedSpan && !isSpanSupported(selectedSpan)) {
+                          setToast({
+                            message: `当前暂不支持 ${selectedSpan.beamType} 梁长 ${selectedSpan.beamLength}m 的桥孔计算`,
+                            type: 'warning'
+                          });
+                          return;
+                        }
+                        setSpanIndex(newIndex);
+                      }}
                       disabled={phase === 'result'}
                       className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50"
                     >
                       {spans.map((s) => (
                         <option key={s.index} value={s.index}>
-                          第 {s.index} 孔 · {s.beamType} · 梁长 {s.beamLength}m
+                          第 {s.index} 孔 · {s.beamType} · 梁长 {s.beamLength}m {!isSpanSupported(s) ? '(暂不支持)' : ''}
                         </option>
                       ))}
                     </select>
@@ -516,7 +574,8 @@ export default function CalculationDrawer({ bridge, isOpen, onClose, onComplete,
               <button
                 type="button"
                 onClick={handleCalculate}
-                className="flex items-center gap-1.5 px-5 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                disabled={!currentSpan || !isSpanSupported(currentSpan)}
+                className="flex items-center gap-1.5 px-5 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Play className="w-4 h-4" />
                 开始计算K值

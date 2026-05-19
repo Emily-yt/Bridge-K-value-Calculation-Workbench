@@ -5,7 +5,8 @@ import MobileNav from './components/MobileNav';
 import CalculationDrawer from './components/CalculationDrawer';
 import ReportPreviewModal from './components/ReportPreviewModal';
 import Dashboard from './pages/Dashboard';
-import BridgeList from './pages/BridgeList';
+import KValueCalculation from './pages/KValueCalculation';
+import Statistics from './pages/Statistics';
 import Settings from './pages/Settings';
 import type { Bridge } from './lib/types';
 
@@ -13,6 +14,7 @@ function App() {
   const [currentView, setCurrentView] = useState<ViewId>('dashboard');
   const [isCalcDrawerOpen, setIsCalcDrawerOpen] = useState(false);
   const [calcTargetBridge, setCalcTargetBridge] = useState<Bridge | null>(null);
+  const [calcTargetSpanIndex, setCalcTargetSpanIndex] = useState<number | undefined>(undefined);
   const [dataRefresh, setDataRefresh] = useState(0);
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportCalcId, setReportCalcId] = useState<string | null>(null);
@@ -21,8 +23,9 @@ function App() {
     setCurrentView(view);
   }, []);
 
-  const handleCalculate = useCallback((bridge: Bridge) => {
+  const handleCalculate = useCallback((bridge: Bridge, spanIndex?: number) => {
     setCalcTargetBridge(bridge);
+    setCalcTargetSpanIndex(spanIndex);
     setIsCalcDrawerOpen(true);
   }, []);
 
@@ -43,42 +46,16 @@ function App() {
   const renderMainContent = () => {
     switch (currentView) {
       case 'dashboard':
-        return <Dashboard dataRefresh={dataRefresh} onViewChange={handleViewChange} onCalculate={handleCalculate} onOpenReport={handleOpenReport} />;
+        return <Dashboard dataRefresh={dataRefresh} onCalculate={handleCalculate} onOpenReport={handleOpenReport} />;
       case 'bridges':
         return (
-          <BridgeList
+          <KValueCalculation
             dataRefresh={dataRefresh}
             onCalculate={handleCalculate}
           />
         );
       case 'statistics':
-        return (
-          <div className="p-6 max-w-7xl mx-auto">
-            <div className="text-center py-20">
-              <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gray-100 flex items-center justify-center">
-                <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z" />
-                </svg>
-              </div>
-              <h2 className="text-xl font-semibold text-gray-700 mb-2">统计分析</h2>
-              <p className="text-gray-500">功能开发中...</p>
-            </div>
-          </div>
-        );
-      case 'templates':
-        return (
-          <div className="p-6 max-w-7xl mx-auto">
-            <div className="text-center py-20">
-              <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gray-100 flex items-center justify-center">
-                <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              </div>
-              <h2 className="text-xl font-semibold text-gray-700 mb-2">报告模板</h2>
-              <p className="text-gray-500">功能开发中...</p>
-            </div>
-          </div>
-        );
+        return <Statistics />;
       case 'users':
         return <Settings />;
       default:
@@ -105,8 +82,12 @@ function App() {
 
       <CalculationDrawer
         bridge={calcTargetBridge}
+        initialSpanIndex={calcTargetSpanIndex}
         isOpen={isCalcDrawerOpen}
-        onClose={() => setIsCalcDrawerOpen(false)}
+        onClose={() => {
+          setIsCalcDrawerOpen(false);
+          setCalcTargetSpanIndex(undefined);
+        }}
         onComplete={handleCalcComplete}
         onOpenReport={handleOpenReport}
       />

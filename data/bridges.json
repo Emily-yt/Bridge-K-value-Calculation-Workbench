@@ -23,7 +23,7 @@
       {"index": 13, "beamLength": 32.6, "beamHeight": 2.64, "beamCenterDist": 1.8, "beamType": "专桥2059"},
       {"index": 14, "beamLength": 32.6, "beamHeight": 2.64, "beamCenterDist": 1.8, "beamType": "专桥2059"},
       {"index": 15, "beamLength": 32.6, "beamHeight": 2.64, "beamCenterDist": 1.8, "beamType": "专桥2059"},
-      {"index": 16, "beamLength": 32.6, "beamHeight": 2.64, "beamCenterDist": 1.8, "beamType": "专桥2059"}
+      {"index": 16, "beamLength": 24.6, "beamHeight": 2.24, "beamCenterDist": 1.8, "beamType": "专桥2059"}
     ],
     "buildYear": 1999,
     "operationStatus": "运营中"
