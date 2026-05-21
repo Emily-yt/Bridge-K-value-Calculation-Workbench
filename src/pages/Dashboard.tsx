@@ -11,7 +11,6 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  ReferenceLine,
 } from 'recharts';
 import { getBridges, getCalculations } from '../lib/db';
 import type { Bridge, KValueCalculation } from '../lib/types';
@@ -19,19 +18,21 @@ import BridgeDetailModal from '../components/BridgeDetailModal';
 import CalculationResultModal from '../components/CalculationResultModal';
 
 // ============ K值等级常量定义 ============
+// 判定逻辑（四级分类）：
+// 1. K >= 1.0：满足要求（绿色）
+// 2. K < 1.0 且 Q值均满足（c80和km98都满足）：满足要求（绿色）
+// 3. K < 1.0 且 Q值有且仅有1个不满足：部分满足（橙黄色）
+// 4. K < 1.0 且 Q值均不满足：不满足要求（红色）
 const K_VALUE_LEVELS = [
-  { key: 'safe', label: '安全充裕', min: 2.0, color: '#10b981', bgColor: '#ecfdf5' },
-  { key: 'normal', label: '满足运营', min: 1.5, color: '#3b82f6', bgColor: '#eff6ff' },
-  { key: 'low', label: '承载偏低', min: 1.0, color: '#f59e0b', bgColor: '#fffbeb' },
-  { key: 'danger', label: '不满足运营', min: -Infinity, color: '#ef4444', bgColor: '#fef2f2' },
+  { key: 'safe', label: '满足要求', min: 1.0, color: '#10b981', bgColor: '#ecfdf5' },
+  { key: 'partial', label: '部分满足', min: -Infinity, color: '#f59e0b', bgColor: '#fffbeb' },
+  { key: 'danger', label: '不满足要求', min: -Infinity, color: '#ef4444', bgColor: '#fef2f2' },
 ] as const;
 
-// 获取 K 值等级
+// 获取 K 值等级（仅基于K值）
 const getKValueLevel = (kValue: number) => {
-  for (const level of K_VALUE_LEVELS) {
-    if (kValue >= level.min) return level;
-  }
-  return K_VALUE_LEVELS[K_VALUE_LEVELS.length - 1];
+  if (kValue >= 1.0) return K_VALUE_LEVELS[0]; // safe
+  return K_VALUE_LEVELS[2]; // danger (默认，实际应根据Q值判断)
 };
 
 interface DashboardStats {
@@ -128,11 +129,21 @@ export default function Dashboard({
         }
         
         const bridgeCalcs = calculations.filter(c => c.bridgeId === bridge.id);
-        const minKValue = bridgeCalcs.length > 0
-          ? Math.min(...bridgeCalcs.map(c => c.output.kFinal))
-          : null;
         
-        if (minKValue !== null && minKValue < 1.0) {
+        // 判定逻辑（考虑Q值）：检查桥梁是否有任何孔跨是 danger 状态
+        const hasDangerSpan = bridgeCalcs.some(calc => {
+          const k = calc.output.kFinal;
+          if (k >= 1.0) return false; // K>=1 是安全的
+          
+          // K<1 时检查Q值
+          const qResult = calc.output.qResult;
+          if (!qResult) return true; // 无Q值数据，视为不满足
+          
+          // Q值均不满足才算 danger
+          return !qResult.c80.meetsRequirement && !qResult.km98.meetsRequirement;
+        });
+        
+        if (hasDangerSpan) {
           lowKValueBridges++;
         }
         
@@ -280,7 +291,7 @@ export default function Dashboard({
           return minKValue < 1.0;
         });
         return {
-          title: 'K值偏低桥梁列表',
+          title: 'K值不满足要求桥梁列表',
           list: lowKList.map(b => {
             const bridgeCalcs = calculations.filter(c => c.bridgeId === b.id);
             const minKValue = Math.min(...bridgeCalcs.map(c => c.output.kFinal));
@@ -420,54 +431,101 @@ export default function Dashboard({
   };
 
   // K值等级分布数据计算
+  // 判定逻辑（四级分类）：
+  // 1. K >= 1.0：满足要求（绿色）
+  // 2. K < 1.0 且 Q值均满足：满足要求（绿色）
+  // 3. K < 1.0 且 Q值有且仅有1个不满足：部分满足（橙黄色）
+  // 4. K < 1.0 且 Q值均不满足：不满足要求（红色）
   const kLevelDistributionData = useMemo(() => {
     const { bridges, calculations } = modalData;
     
     // 根据时间范围筛选计算记录
     const filteredCalculations = getFilteredCalculationsByTimeRange(calculations, timeRangeForDistribution);
     
+    // 获取K值等级（考虑Q值）- 四级分类
+    const getLevel = (kFinal: number, qResult?: KValueCalculation['output']['qResult']) => {
+      // K >= 1.0 直接满足
+      if (kFinal >= 1.0) return 'safe';
+      
+      // K < 1.0 时需要检查Q值
+      if (!qResult) return 'danger';
+      
+      const c80Ok = qResult.c80.meetsRequirement;
+      const km98Ok = qResult.km98.meetsRequirement;
+      
+      if (c80Ok && km98Ok) {
+        // Q值均满足
+        return 'safe';
+      } else if (c80Ok || km98Ok) {
+        // 有且仅有1个不满足
+        return 'partial';
+      } else {
+        // Q值均不满足
+        return 'danger';
+      }
+    };
+    
     if (selectedBridgeForDistribution === 'all') {
       // 全部桥梁：按桥梁K值统计
-      const evaluatedBridges = bridges.filter((bridge) => {
+      // 找到每座桥梁的最小K值（短板孔跨），并根据Q值判定
+      let safeCount = 0;
+      let partialCount = 0;
+      let dangerCount = 0;
+      
+      bridges.forEach((bridge) => {
         const bridgeCalcs = filteredCalculations.filter((c) => c.bridgeId === bridge.id);
-        return bridgeCalcs.length > 0;
-      }).map((bridge) => {
-        const bridgeCalcs = filteredCalculations.filter((c) => c.bridgeId === bridge.id);
-        const kFinals = bridgeCalcs.map((c) => c.output.kFinal);
-        return Math.min(...kFinals);
+        if (bridgeCalcs.length === 0) return;
+        
+        // 找到最小K值的计算记录
+        const minCalc = bridgeCalcs.reduce((min, calc) => 
+          calc.output.kFinal < min.output.kFinal ? calc : min
+        );
+        
+        const level = getLevel(minCalc.output.kFinal, minCalc.output.qResult);
+        if (level === 'safe') safeCount++;
+        else if (level === 'partial') partialCount++;
+        else dangerCount++;
       });
       
       return {
-        safe: evaluatedBridges.filter((k) => k >= 2.0).length,
-        normal: evaluatedBridges.filter((k) => k >= 1.5 && k < 2.0).length,
-        low: evaluatedBridges.filter((k) => k >= 1.0 && k < 1.5).length,
-        danger: evaluatedBridges.filter((k) => k < 1.0).length,
+        safe: safeCount,
+        partial: partialCount,
+        danger: dangerCount,
         isBySpan: false,
       };
     } else {
       // 特定桥梁：按孔跨K值统计
       const bridge = bridges.find((b) => b.id === selectedBridgeForDistribution);
       if (!bridge) {
-        return { safe: 0, normal: 0, low: 0, danger: 0, isBySpan: true };
+        return { safe: 0, partial: 0, danger: 0, isBySpan: true };
       }
       
-      // 获取每个孔跨的最新K值
-      const spanKValues: number[] = [];
+      // 获取每个孔跨的最新计算记录，并根据Q值判定
+      let safeCount = 0;
+      let partialCount = 0;
+      let dangerCount = 0;
+      
       for (let i = 1; i <= bridge.spanCount; i++) {
         const spanCalcs = filteredCalculations.filter(
           (c) => c.bridgeId === selectedBridgeForDistribution && c.spanIndex === i
         );
         if (spanCalcs.length > 0) {
-          const kFinals = spanCalcs.map((c) => c.output.kFinal);
-          spanKValues.push(Math.min(...kFinals));
+          // 取最新的计算记录
+          const latestCalc = spanCalcs.sort((a, b) => 
+            new Date(b.createTime).getTime() - new Date(a.createTime).getTime()
+          )[0];
+          
+          const level = getLevel(latestCalc.output.kFinal, latestCalc.output.qResult);
+          if (level === 'safe') safeCount++;
+          else if (level === 'partial') partialCount++;
+          else dangerCount++;
         }
       }
       
       return {
-        safe: spanKValues.filter((k) => k >= 2.0).length,
-        normal: spanKValues.filter((k) => k >= 1.5 && k < 2.0).length,
-        low: spanKValues.filter((k) => k >= 1.0 && k < 1.5).length,
-        danger: spanKValues.filter((k) => k < 1.0).length,
+        safe: safeCount,
+        partial: partialCount,
+        danger: dangerCount,
         isBySpan: true,
       };
     }
@@ -484,7 +542,7 @@ export default function Dashboard({
 
   // K值趋势数据计算
   const kValueTrendData = useMemo(() => {
-    const { bridges, calculations } = modalData;
+    const { calculations } = modalData;
     
     // 根据时间范围筛选计算记录
     const filteredCalculations = getFilteredCalculationsByTimeRange(calculations, timeRangeForTrend);
@@ -620,7 +678,7 @@ export default function Dashboard({
           onClick={() => setModalType('pending')}
         />
         <StatCard
-          title="K值偏低"
+          title="K值不满足"
           value={stats.lowKValueBridges}
           icon={TrendingDown}
           color="bg-red-500"
@@ -641,16 +699,11 @@ export default function Dashboard({
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm h-[300px] flex flex-col">
-          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+          <div className="px-5 py-4 border-b border-gray-100 flex items-center flex-shrink-0">
             <div className="flex items-center gap-2">
               <Calculator className="w-5 h-5 text-blue-600" />
               <h3 className="font-semibold text-gray-800">最近计算记录</h3>
             </div>
-            <button 
-              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-            >
-              查看全部
-            </button>
           </div>
           <div className="flex-1 overflow-y-auto">
             <div className="divide-y divide-gray-100">
@@ -682,7 +735,7 @@ export default function Dashboard({
                       </div>
                       <div className="flex items-center gap-3 flex-shrink-0">
                         {record.kValue && (
-                          <span className="text-sm font-semibold text-gray-700">K={record.kValue.toFixed(4)}</span>
+                          <span className="text-sm font-semibold text-gray-700">K={record.kValue.toFixed(2)}</span>
                         )}
                       </div>
                     </div>
@@ -699,16 +752,11 @@ export default function Dashboard({
 
         {/* 即将到期检定卡片 */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm h-[300px] flex flex-col">
-          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+          <div className="px-5 py-4 border-b border-gray-100 flex items-center flex-shrink-0">
             <div className="flex items-center gap-2">
               <AlertCircle className="w-5 h-5 text-orange-500" />
               <h3 className="font-semibold text-gray-800">即将到期检定</h3>
             </div>
-            <button 
-              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-            >
-              查看全部
-            </button>
           </div>
           <div className="flex-1 overflow-y-auto">
             <div className="divide-y divide-gray-100">
@@ -799,7 +847,7 @@ export default function Dashboard({
             </div>
           </div>
           
-          {(kLevelDistributionData.safe + kLevelDistributionData.normal + kLevelDistributionData.low + kLevelDistributionData.danger) > 0 ? (
+          {(kLevelDistributionData.safe + kLevelDistributionData.partial + kLevelDistributionData.danger) > 0 ? (
             <div className="flex items-center justify-center gap-12">
               {/* 饼图区域 */}
               <div className="h-56 w-72">
@@ -807,12 +855,11 @@ export default function Dashboard({
                   <RePieChart>
                     <Pie
                       data={[
-                        { name: '安全充裕', value: kLevelDistributionData.safe, color: K_VALUE_LEVELS[0].color },
-                        { name: '满足运营', value: kLevelDistributionData.normal, color: K_VALUE_LEVELS[1].color },
-                        { name: '承载偏低', value: kLevelDistributionData.low, color: K_VALUE_LEVELS[2].color },
-                        { name: '不满足运营', value: kLevelDistributionData.danger, color: K_VALUE_LEVELS[3].color },
+                        { name: '满足要求', value: kLevelDistributionData.safe, color: K_VALUE_LEVELS[0].color },
+                        { name: '部分满足', value: kLevelDistributionData.partial, color: K_VALUE_LEVELS[1].color },
+                        { name: '不满足要求', value: kLevelDistributionData.danger, color: K_VALUE_LEVELS[2].color },
                       ].filter((d) => d.value > 0)}
-                      cx="45%"
+                      cx="55%"
                       cy="50%"
                       innerRadius={60}
                       outerRadius={85}
@@ -820,27 +867,51 @@ export default function Dashboard({
                       dataKey="value"
                       isAnimationActive={false}
                       label={(props) => {
-                        const { x, y, percent } = props;
+                        const { x, y, percent, index } = props;
+                        const percentValue = percent ?? 0;
+                        // 根据索引获取对应的数据
+                        const data = [
+                          { name: '满足要求', value: kLevelDistributionData.safe, color: K_VALUE_LEVELS[0].color },
+                          { name: '部分满足', value: kLevelDistributionData.partial, color: K_VALUE_LEVELS[1].color },
+                          { name: '不满足要求', value: kLevelDistributionData.danger, color: K_VALUE_LEVELS[2].color },
+                        ].filter((d) => d.value > 0);
+                        const item = data[index as number];
+                        if (!item) return null;
+                        // 根据x坐标判断标签在左侧还是右侧
+                           const isLeftSide = (x as number) < 160; // 饼图中心约160px
+                           const labelX = isLeftSide ? 25 : 280;
+                           const textAnchor = isLeftSide ? 'start' : 'end';
                         return (
-                          <text
-                            x={x}
-                            y={y}
-                            fill={K_VALUE_LEVELS[3].color}
-                            textAnchor="middle"
-                            dominantBaseline="central"
-                            style={{ fontSize: '13px', fontWeight: 500 }}
-                          >
-                            {`${(percent * 100).toFixed(0)}%`}
-                          </text>
+                          <g>
+                            <text
+                              x={labelX}
+                              y={(y as number) - 8}
+                              fill={item.color}
+                              textAnchor={textAnchor}
+                              dominantBaseline="central"
+                              style={{ fontSize: '12px', fontWeight: 500 }}
+                            >
+                              {item.name}
+                            </text>
+                            <text
+                              x={labelX}
+                              y={(y as number) + 8}
+                              fill={item.color}
+                              textAnchor={textAnchor}
+                              dominantBaseline="central"
+                              style={{ fontSize: '12px', fontWeight: 500 }}
+                            >
+                              {`${(percentValue * 100).toFixed(0)}%`}
+                            </text>
+                          </g>
                         );
                       }}
-                      labelLine={false}
+                      labelLine={{ stroke: '#9ca3af', strokeWidth: 1 }}
                     >
                       {[
-                        { name: '安全充裕', value: kLevelDistributionData.safe, color: K_VALUE_LEVELS[0].color },
-                        { name: '满足运营', value: kLevelDistributionData.normal, color: K_VALUE_LEVELS[1].color },
-                        { name: '承载偏低', value: kLevelDistributionData.low, color: K_VALUE_LEVELS[2].color },
-                        { name: '不满足运营', value: kLevelDistributionData.danger, color: K_VALUE_LEVELS[3].color },
+                        { name: '满足要求', value: kLevelDistributionData.safe, color: K_VALUE_LEVELS[0].color },
+                        { name: '部分满足', value: kLevelDistributionData.partial, color: K_VALUE_LEVELS[1].color },
+                        { name: '不满足要求', value: kLevelDistributionData.danger, color: K_VALUE_LEVELS[2].color },
                       ]
                         .filter((d) => d.value > 0)
                         .map((entry, index) => (
@@ -855,7 +926,7 @@ export default function Dashboard({
                         boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
                         padding: '8px 12px',
                       }}
-                      formatter={(value: number, name: string) => [`${value} ${kLevelDistributionData.isBySpan ? '孔' : '座'}`, name]}
+                      formatter={(value, name) => [`${value} ${kLevelDistributionData.isBySpan ? '孔' : '座'}`, name]}
                       labelStyle={{ display: 'none' }}
                       itemStyle={{ fontSize: '12px' }}
                     />
@@ -868,30 +939,23 @@ export default function Dashboard({
                 <div className="flex items-center justify-between p-1.5 rounded-lg" style={{ backgroundColor: K_VALUE_LEVELS[0].bgColor }}>
                   <div className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full" style={{ backgroundColor: K_VALUE_LEVELS[0].color }} />
-                    <span style={{ fontSize: '13px', color: '#374151' }}>安全充裕</span>
+                    <span style={{ fontSize: '13px', color: '#374151' }}>满足要求</span>
                   </div>
                   <span className="font-semibold" style={{ fontSize: '13px', color: K_VALUE_LEVELS[0].color }}>{kLevelDistributionData.safe}</span>
                 </div>
                 <div className="flex items-center justify-between p-1.5 rounded-lg" style={{ backgroundColor: K_VALUE_LEVELS[1].bgColor }}>
                   <div className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full" style={{ backgroundColor: K_VALUE_LEVELS[1].color }} />
-                    <span style={{ fontSize: '13px', color: '#374151' }}>满足运营</span>
+                    <span style={{ fontSize: '13px', color: '#374151' }}>部分满足</span>
                   </div>
-                  <span className="font-semibold" style={{ fontSize: '13px', color: K_VALUE_LEVELS[1].color }}>{kLevelDistributionData.normal}</span>
+                  <span className="font-semibold" style={{ fontSize: '13px', color: K_VALUE_LEVELS[1].color }}>{kLevelDistributionData.partial}</span>
                 </div>
                 <div className="flex items-center justify-between p-1.5 rounded-lg" style={{ backgroundColor: K_VALUE_LEVELS[2].bgColor }}>
                   <div className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full" style={{ backgroundColor: K_VALUE_LEVELS[2].color }} />
-                    <span style={{ fontSize: '13px', color: '#374151' }}>承载偏低</span>
+                    <span style={{ fontSize: '13px', color: '#374151' }}>不满足要求</span>
                   </div>
-                  <span className="font-semibold" style={{ fontSize: '13px', color: K_VALUE_LEVELS[2].color }}>{kLevelDistributionData.low}</span>
-                </div>
-                <div className="flex items-center justify-between p-1.5 rounded-lg" style={{ backgroundColor: K_VALUE_LEVELS[3].bgColor }}>
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: K_VALUE_LEVELS[3].color }} />
-                    <span style={{ fontSize: '13px', color: '#374151' }}>不满足运营</span>
-                  </div>
-                  <span className="font-semibold" style={{ fontSize: '13px', color: K_VALUE_LEVELS[3].color }}>{kLevelDistributionData.danger}</span>
+                  <span className="font-semibold" style={{ fontSize: '13px', color: K_VALUE_LEVELS[2].color }}>{kLevelDistributionData.danger}</span>
                 </div>
               </div>
             </div>
@@ -991,8 +1055,9 @@ export default function Dashboard({
                       boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
                       padding: '8px 12px',
                     }}
-                    formatter={(value: number, _name: string, props: { payload: { level: string; count: number } }) => {
-                      return [`${value.toFixed(4)} (${props.payload.level})`, selectedBridgeForTrend === 'all' ? '平均K值' : '最小K值'];
+                    formatter={(value) => {
+                      const numValue = typeof value === 'number' ? value : 0;
+                      return [`${numValue.toFixed(2)}`, selectedBridgeForTrend === 'all' ? '平均K值' : '最小K值'];
                     }}
                     labelFormatter={(label) => label}
                     labelStyle={{ color: '#374151', fontWeight: 500, fontSize: '13px' }}

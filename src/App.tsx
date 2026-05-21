@@ -7,7 +7,6 @@ import ReportPreviewModal from './components/ReportPreviewModal';
 import Dashboard from './pages/Dashboard';
 import KValueCalculation from './pages/KValueCalculation';
 import Statistics from './pages/Statistics';
-import Settings from './pages/Settings';
 import type { Bridge } from './lib/types';
 
 function App() {
@@ -56,8 +55,6 @@ function App() {
         );
       case 'statistics':
         return <Statistics />;
-      case 'users':
-        return <Settings />;
       default:
         return null;
     }

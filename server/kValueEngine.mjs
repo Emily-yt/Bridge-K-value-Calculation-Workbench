@@ -1,6 +1,7 @@
 /**
- * K值计算核心（与 docs/后端设计说明.md、docs/K值计算逻辑说明.md 对齐）
- * K1：按规范分项公式；K2～K4：暂未指定计算公式，设为默认值3.0
+ * K值计算核心引擎 v2.0
+ * 根据 docs/K值计算逻辑.md 实现
+ * 包含K1-K5全部分项检定承载系数计算
  */
 
 const BEAM_POSITIONS = new Set(['直线梁', '曲线外梁', '曲线内梁']);
@@ -90,20 +91,33 @@ function lookupEtaMidspan(fp, beamPosition, curveRadius, eccentricityE) {
   return interpolateNumericTable(table, eccentricityE);
 }
 
-function lookupEtaL8Shear(fp, beamPosition, curveRadius, eccentricityE) {
-  const shearEta = fp.l8ShearEta;
-  if (!shearEta) throw new Error('固定参数缺少 l8ShearEta（L/8 剪力偏载系数）');
+function lookupEtaL8(fp, beamPosition, curveRadius, eccentricityE) {
+  const l8Table = fp.eccentricityTable?.l8;
+  if (!l8Table) throw new Error('固定参数缺少 eccentricityTable.l8');
 
   if (beamPosition === '直线梁') {
-    const row = shearEta['直线梁'];
-    return interpolateArrays(eccentricityE, row.e, row.etaQ_Qmin);
+    const table = l8Table['直线梁'];
+    const eArr = Object.keys(table).map(Number).sort((a, b) => a - b);
+    const etaMArr = eArr.map(e => table[String(e)].etaM);
+    const etaQArr = eArr.map(e => table[String(e)].etaQ);
+    return {
+      etaM: interpolateArrays(eccentricityE, eArr, etaMArr),
+      etaQ: interpolateArrays(eccentricityE, eArr, etaQArr)
+    };
   }
 
   const rKey = `R${standardRadius(curveRadius)}`;
   const pos = beamPosition === '曲线外梁' ? '曲线外梁' : '曲线内梁';
-  const row = shearEta[pos]?.[rKey];
-  if (!row) throw new Error(`缺少 L/8 剪力偏载系数：${pos} ${rKey}`);
-  return interpolateArrays(eccentricityE, row.e, row.etaQ_Qmin);
+  const table = l8Table[pos]?.[rKey];
+  if (!table) throw new Error(`缺少L/8偏载系数表：${pos} ${rKey}`);
+  
+  const eArr = Object.keys(table).map(Number).sort((a, b) => a - b);
+  const etaMArr = eArr.map(e => table[String(e)].etaM);
+  const etaQArr = eArr.map(e => table[String(e)].etaQ);
+  return {
+    etaM: interpolateArrays(eccentricityE, eArr, etaMArr),
+    etaQ: interpolateArrays(eccentricityE, eArr, etaQArr)
+  };
 }
 
 function normDamage(input) {
@@ -120,6 +134,56 @@ function normDamage(input) {
 }
 
 /**
+ * 计算K5（斜截面抗裂性）- 通过方程组求解
+ * 应满足 |σtp| ≤ Z3H·fct
+ * 
+ * 根据文档公式：
+ * σc = Z2M·Z4Y·σpc - K·[Z2M·σ_dead + K5·Z2M·(1+μ)·ηM·σ_L]
+ * τc = K·[Z2Q·τ_dead + K5·Z2Q·(1+μ)·ηQ·τ_L] - Z2Q·Z4Y·τpc
+ * σtp = σc/2 - sqrt((σc/2)^2 + τc^2)
+ */
+function calculateK5(sigma_c_dead, tau_dead, sigma_pc_eff, tau_pc_eff,
+                     sigma_L_live, tau_L_live, mu1, etaM, etaQ,
+                     z2m, z2q, z3h, K_crack, fct) {
+  // 二分法求解K5
+  let k5_low = 0;
+  let k5_high = 5;
+  const fctEffective = z3h * fct; // 混凝土抗拉极限强度（经Z3H修正）
+  const tolerance = 0.0001;
+  const maxIter = 100;
+
+  for (let i = 0; i < maxIter; i++) {
+    const k5 = (k5_low + k5_high) / 2;
+
+    // 计算σc和τc（注意：传入的sigma_pc_eff和tau_pc_eff已包含Z2M·Z4Y和Z2Q·Z4Y）
+    // σc = Z2M·Z4Y·σpc - K·[Z2M·σ_dead + K5·Z2M·(1+μ)·ηM·σ_L]
+    const sigma_c = sigma_pc_eff - K_crack * (z2m * sigma_c_dead + k5 * z2m * mu1 * etaM * sigma_L_live);
+    // τc = K·[Z2Q·τ_dead + K5·Z2Q·(1+μ)·ηQ·τ_L] - Z2Q·Z4Y·τpc
+    const tau_c = K_crack * (z2q * tau_dead + k5 * z2q * mu1 * etaQ * tau_L_live) - tau_pc_eff;
+
+    // 计算主拉应力σtp
+    const sigma_tp = sigma_c / 2 - Math.sqrt(Math.pow(sigma_c / 2, 2) + Math.pow(tau_c, 2));
+
+    // 检查是否满足 |σtp| ≤ Z3H·fct
+    const absSigmaTp = Math.abs(sigma_tp);
+
+    if (Math.abs(absSigmaTp - fctEffective) < tolerance) {
+      return k5;
+    }
+
+    if (absSigmaTp > fctEffective) {
+      // 主拉应力过大，需要减小K5
+      k5_high = k5;
+    } else {
+      // 主拉应力满足，可以尝试增大K5
+      k5_low = k5;
+    }
+  }
+  
+  return (k5_low + k5_high) / 2;
+}
+
+/**
  * @param {string} beamType 梁型图号，对应 fixed_params.spanTypes
  * @param {object} input 用户输入（含 damageFactors）
  * @param {object} fixedRoot 完整 fixed_params 根对象
@@ -130,11 +194,6 @@ export function runKValueCalculation(beamType, input, fixedRoot) {
   const fp = fixedRoot.spanTypes?.[beamType];
   if (!fp) throw new Error(`未配置梁型「${beamType}」的固定参数，请在 data/fixed_params.json 中补充`);
 
-  const extras = fp.calculationExtras;
-  if (!extras?.section || !extras?.prestressN) {
-    throw new Error(`梁型「${beamType}」缺少 calculationExtras（截面与预应力），无法计算 K2～K4`);
-  }
-
   const z = normDamage(input);
   const beamPosition = input.beamPosition;
   const curveRadius = beamPosition === '直线梁' ? null : input.curveRadius;
@@ -142,6 +201,16 @@ export function runKValueCalculation(beamType, input, fixedRoot) {
   const mu1 = input.impactFactor;
   const eMm = input.eccentricityE;
 
+  // 获取安全系数
+  const Kw = fp.safetyFactors?.strength ?? 2.0;
+  const K_crack = fp.safetyFactors?.crackResistance ?? 1.2;
+
+  // 获取材料参数
+  const fct = fp.concrete?.tensileStrength ?? 3.02;
+  const fc = fp.concrete?.compressiveStrength ?? 32.10;
+  const gamma = fp.concrete?.plasticFactor?.[beamPosition === '直线梁' ? '直线梁' : '曲线梁'] ?? 1.323;
+
+  // ===== 跨中截面参数 =====
   const ms = fp.internalForces.midspan;
   const mq0 = ms.mq0;
   const mq1Val = ms.mq1[beamPosition];
@@ -149,60 +218,199 @@ export function runKValueCalculation(beamType, input, fixedRoot) {
   const mq3 = ms.mq3Per10cm;
   const mLZh = ms.mL['中-活载'];
 
-  const etaM = lookupEtaMidspan(fp, beamPosition, curveRadius, eMm);
-  const etaL8Q = lookupEtaL8Shear(fp, beamPosition, curveRadius, eMm);
+  // 跨中应力参数
+  const sigmaMid = fp.stresses?.midspan;
+  const sigma_q0_mid = sigmaMid?.sigma_q0 ?? -6.520;
+  const sigma_q1_mid = sigmaMid?.sigma_q1?.[beamPosition] ?? -3.211;
+  const sigma_q2_mid = sigmaMid?.sigma_q2 ?? -0.948;
+  const sigma_q3_mid = sigmaMid?.sigma_q3Per10cm ?? -0.675;
+  const sigma_L_mid = sigmaMid?.sigma_L?.['中-活载'] ?? -8.539;
 
+  // 跨中预应力效应
+  const sigma_pc_mid = fp.prestressEffect?.midspan?.sigma_pc?.[beamPosition] ?? 
+                       (beamPosition === '直线梁' ? 20.956 : 23.995);
+
+  // 查表获取跨中偏载系数
+  const etaM_mid = lookupEtaMidspan(fp, beamPosition, curveRadius, eMm);
+
+  // 计算跨中主力组合
   const deadLoadMoment = mq0 + mq1Val + mq2 + (t / 10) * mq3;
-  const liveLoadMoment = mu1 * etaM * mLZh;
+  const liveLoadMoment = mu1 * etaM_mid * mLZh;
   const momentM = deadLoadMoment + liveLoadMoment;
 
-  const Kw = fp.safetyFactor ?? 2.0;
+  const deadLoadSigmaMid = sigma_q0_mid + sigma_q1_mid + sigma_q2_mid + (t / 10) * sigma_q3_mid;
+  const liveLoadSigmaMid = mu1 * etaM_mid * sigma_L_mid;
+  const sigmaMidTotal = deadLoadSigmaMid + liveLoadSigmaMid;
+
+  // ===== L/8截面参数 =====
+  const l8 = fp.internalForces.l8;
+  const l8Stresses = fp.stresses?.l8;
+  const l8Prestress = fp.prestressEffect?.l8;
+
+  // L/8内力参数（对应V_min工况）
+  const mq0_l8_q = l8.mq0.q;
+  const mq1_l8_q = l8.mq1[beamPosition].q;
+  const mq2_l8_q = l8.mq2.q;
+  const mq3_l8_q = l8.mq3Per10cm.q;
+  const mL_l8_q = l8.mL['中-活载'].qMax; // 使用qMax对应V_min工况
+
+  // L/8剪应力参数（中性轴）
+  const tau_q0_l8 = l8Stresses?.neutral?.tau_q0 ?? -1.197;
+  const tau_q1_l8 = l8Stresses?.neutral?.tau_q1?.[beamPosition] ?? -0.667;
+  const tau_q2_l8 = l8Stresses?.neutral?.tau_q2 ?? -0.197;
+  const tau_q3_l8 = l8Stresses?.neutral?.tau_q3Per10cm ?? -0.140;
+  const tau_L_l8 = l8Stresses?.neutral?.tau_L?.['中-活载'] ?? -1.752;
+
+  // L/8下梗腋应力参数
+  const lowerHaunch = l8Stresses?.lowerHaunch;
+  const sigma_q0_lh = lowerHaunch?.sigma_q0 ?? -1.692;
+  const sigma_q1_lh = lowerHaunch?.sigma_q1?.[beamPosition] ?? -0.838;
+  const sigma_q2_lh = lowerHaunch?.sigma_q2 ?? -0.247;
+  const sigma_q3_lh = lowerHaunch?.sigma_q3Per10cm ?? -0.176;
+  const sigma_L_lh = lowerHaunch?.sigma_L?.['中-活载'] ?? -2.468;
+
+  const tau_q0_lh = lowerHaunch?.tau_q0 ?? -1.039;
+  const tau_q1_lh = lowerHaunch?.tau_q1?.[beamPosition] ?? -0.593;
+  const tau_q2_lh = lowerHaunch?.tau_q2 ?? -0.175;
+  const tau_q3_lh = lowerHaunch?.tau_q3Per10cm ?? -0.125;
+  const tau_L_lh = lowerHaunch?.tau_L?.['中-活载'] ?? -1.558;
+
+  // L/8预应力效应
+  const tau_pc_l8 = l8Prestress?.neutral?.tau_pc?.[beamPosition] ?? 
+                    (beamPosition === '直线梁' ? 1.262 : 1.367);
+  const sigma_pc_lh = l8Prestress?.lowerHaunch?.sigma_pc?.[beamPosition] ?? 
+                      (beamPosition === '直线梁' ? 13.040 : 14.750);
+  const tau_pc_lh = l8Prestress?.lowerHaunch?.tau_pc?.[beamPosition] ?? 
+                    (beamPosition === '直线梁' ? 1.087 : 1.172);
+
+  // 查表获取L/8偏载系数
+  const etaL8 = lookupEtaL8(fp, beamPosition, curveRadius, eMm);
+  const etaM_l8 = etaL8.etaM;
+  const etaQ_l8 = etaL8.etaQ;
+
+  // 计算L/8主力组合
+  const deadLoadTauL8 = tau_q0_l8 + tau_q1_l8 + tau_q2_l8 + (t / 10) * tau_q3_l8;
+  const liveLoadTauL8 = mu1 * etaQ_l8 * tau_L_l8;
+  const tauL8Total = deadLoadTauL8 + liveLoadTauL8;
+
+  const deadLoadSigmaLh = sigma_q0_lh + sigma_q1_lh + sigma_q2_lh + (t / 10) * sigma_q3_lh;
+  const liveLoadSigmaLh = mu1 * etaM_l8 * sigma_L_lh;
+  
+  const deadLoadTauLh = tau_q0_lh + tau_q1_lh + tau_q2_lh + (t / 10) * tau_q3_lh;
+  const liveLoadTauLh = mu1 * etaQ_l8 * tau_L_lh;
+
+  // ===== 强度参数 =====
   const mpStraight = fp.strength.mp['直线梁'];
   const mpCurve = fp.strength.mp['曲线梁'];
   const mpVal = beamPosition === '直线梁' ? mpStraight : mpCurve;
-  const calcSpan = fp.calcSpan ?? 32.0;
 
-  // K1：docs 公式 — (Z1M·Mp/Kw − Σ恒载弯矩) / ((1+μ)·η·ML)
+  // ===== K1：正截面抗弯强度 =====
+  // K1 = (Z1M·Mp/Kw − Σ恒载弯矩) / ((1+μ)·η·ML)
   const k1Num = (z.z1m * mpVal) / Kw - deadLoadMoment;
-  const k1Den = mu1 * etaM * mLZh;
+  const k1Den = mu1 * etaM_mid * mLZh;
   const k1 = k1Den !== 0 ? Math.max(0, k1Num / k1Den) : 0;
 
-  // K2～K4：材料参数来自 fixed_params
-  let k2 = 3;
-  let k3 = 3;
-  let k4 = 3;
+  // ===== K2：正截面抗裂性 =====
+  // K2 = [(Z2M·Z4Y·σpc + γ·Z3H·fct)/K − Z2M·Σ恒载应力] / [Z2M·(1+μ)·η·σL]
+  const k2Num = (z.z2m * z.z4y * sigma_pc_mid + gamma * z.z3h * fct) / K_crack - z.z2m * deadLoadSigmaMid;
+  const k2Den = z.z2m * mu1 * etaM_mid * Math.abs(sigma_L_mid);
+  const k2 = k2Den !== 0 ? Math.max(0, k2Num / k2Den) : 0;
 
-  k2 = Math.max(0, k2);
-  k3 = Math.max(0, k3);
-  k4 = Math.max(0, k4);
+  // ===== K3：正截面应力 =====
+  // K3 = (Z2M·Z4Y·σpc − Z2M·Σ恒载应力) / [Z2M·(1+μ)·η·σL]
+  const k3Num = z.z2m * z.z4y * sigma_pc_mid - z.z2m * deadLoadSigmaMid;
+  const k3Den = z.z2m * mu1 * etaM_mid * Math.abs(sigma_L_mid);
+  const k3 = k3Den !== 0 ? Math.max(0, k3Num / k3Den) : 0;
 
-  const kFinal = Math.min(k1, k2, k3, k4);
+  // ===== K4：斜截面剪应力 =====
+  // K4 = [(Z2Q·Z4Y·τpc + Z3H·0.17·fc) − Z2Q·Σ恒载剪应力] / [Z2Q·(1+μ)·η·τL]
+  const k4Num = (z.z2q * z.z4y * tau_pc_l8 + z.z3h * 0.17 * fc) - z.z2q * deadLoadTauL8;
+  const k4Den = z.z2q * mu1 * etaQ_l8 * Math.abs(tau_L_l8);
+  const k4 = k4Den !== 0 ? Math.max(0, k4Num / k4Den) : 0;
 
+  // ===== K5：斜截面抗裂性 =====
+  // 使用方程组求解，应满足 |σtp| ≤ Z3H·fct
+  const sigma_pc_eff = z.z2m * z.z4y * sigma_pc_lh;
+  const tau_pc_eff = z.z2q * z.z4y * tau_pc_lh;
+  
+  const k5 = calculateK5(
+    deadLoadSigmaLh, deadLoadTauLh,
+    sigma_pc_eff, tau_pc_eff,
+    sigma_L_lh, tau_L_lh,
+    mu1, etaM_l8, etaQ_l8,
+    z.z2m, z.z2q, z.z3h, K_crack, fct
+  );
+
+  // 最终K值取最小值
+  const kFinal = Math.min(k1, k2, k3, k4, k5);
+
+  // ===== Q值计算（当K < 1时）=====
+  let qC80 = null;
+  let qKM98 = null;
+  let qResult = null;
+
+  if (kFinal < 1.0) {
+    // 获取C80和KM98的内力参数
+    const mL_C80 = ms.mL['C80'];
+    const mL_KM98 = ms.mL['KM98'];
+    const mL_Zhong = ms.mL['中-活载'];
+
+    // L/8截面剪力参数
+    const mL_l8_C80 = l8.mL['C80'].qMin;
+    const mL_l8_KM98 = l8.mL['KM98'].qMin;
+    const mL_l8_Zhong = l8.mL['中-活载'].qMin;
+
+    // 计算Q^C80 = max(M_L^C80/M_L^中-活载, V_L^C80/V_L^中-活载)
+    const qC80_M = mL_C80 / mL_Zhong;
+    const qC80_V = Math.abs(mL_l8_C80) / Math.abs(mL_l8_Zhong);
+    qC80 = Math.max(qC80_M, qC80_V);
+
+    // 计算Q^KM98 = max(M_L^KM98/M_L^中-活载, V_L^KM98/V_L^中-活载)
+    const qKM98_M = mL_KM98 / mL_Zhong;
+    const qKM98_V = Math.abs(mL_l8_KM98) / Math.abs(mL_l8_Zhong);
+    qKM98 = Math.max(qKM98_M, qKM98_V);
+
+    // 判定是否满足要求：Q < K
+    qResult = {
+      c80: { q: Number(qC80.toFixed(4)), meetsRequirement: qC80 < kFinal },
+      km98: { q: Number(qKM98.toFixed(4)), meetsRequirement: qKM98 < kFinal },
+    };
+  }
+
+  // 追踪参数
   const fixedParamsTrace = {
-    mq0,
-    mq1: mq1Val,
-    mq2,
-    mq3,
-    mL: mLZh,
-    mp: mpVal,
-    etaM,
-    etaL8Q,
-    calcSpan,
-    Kw,
-    concrete: { f_ct: fp.concrete.tensileStrength, f_c: fp.concrete.compressiveStrength },
+    // 跨中参数
+    mq0, mq1: mq1Val, mq2, mq3, mL: mLZh,
+    sigma_q0: sigma_q0_mid, sigma_q1: sigma_q1_mid, sigma_q2: sigma_q2_mid, 
+    sigma_q3: sigma_q3_mid, sigma_L: sigma_L_mid,
+    sigma_pc_mid, etaM: etaM_mid,
+    // L/8参数
+    tau_q0: tau_q0_l8, tau_q1: tau_q1_l8, tau_q2: tau_q2_l8, 
+    tau_q3: tau_q3_l8, tau_L: tau_L_l8,
+    tau_pc_l8, etaM_l8, etaQ_l8,
+    // 下梗腋参数
+    sigma_q0_lh, sigma_q1_lh, sigma_q2_lh, sigma_q3_lh, sigma_L_lh,
+    tau_q0_lh, tau_q1_lh, tau_q2_lh, tau_q3_lh, tau_L_lh,
+    sigma_pc_lh, tau_pc_lh,
+    // 材料参数
+    mp: mpVal, Kw, K_crack, fct, fc, gamma,
+    // 修正系数
+    damageFactors: z,
   };
 
   return {
-    etaM,
-    etaL8Q,
+    etaM: etaM_mid,
+    etaL8Q: etaQ_l8,
     momentM,
     fixedParamsTrace,
     output: {
-      k1,
-      k2,
-      k3,
-      k4,
-      kFinal,
+      k1: Number(k1.toFixed(4)),
+      k2: Number(k2.toFixed(4)),
+      k3: Number(k3.toFixed(4)),
+      k4: Number(k4.toFixed(4)),
+      k5: Number(k5.toFixed(4)),
+      kFinal: Number(kFinal.toFixed(4)),
+      qResult,
     },
   };
 }

@@ -2,12 +2,12 @@
   "version": "1.0",
   "calculations": [
     {
-      "id": "CALC1779207647448mdhgqp",
-      "bridgeId": "BRG002",
-      "spanIndex": 5,
+      "id": "CALC17793844719326y3xms",
+      "bridgeId": "BRG001",
+      "spanIndex": 3,
       "spanLength": 32,
       "beamType": "专桥2059",
-      "createTime": "2026-05-20T00:20:47.448+08:00",
+      "createTime": "2026-05-22T01:27:51.932+08:00",
       "creator": "当前用户",
       "creatorId": null,
       "input": {
@@ -28,31 +28,75 @@
       },
       "intermediate": {
         "etaM": 1,
-        "momentM": 16642.477,
+        "momentM": 15188.436,
         "fixedParams": {
           "mq0": 4248,
           "mq1": 2367.2,
           "mq2": 811.9,
           "mq3": 497.7,
-          "mL": 7512.8,
-          "mp": 29752,
+          "mL": 6294.5,
+          "sigma_q0": -6.52,
+          "sigma_q1": -3.211,
+          "sigma_q2": -0.948,
+          "sigma_q3": -0.675,
+          "sigma_L": -8.539,
+          "sigma_pc_mid": 20.956,
           "etaM": 1,
-          "etaL8Q": 1,
-          "calcSpan": 32,
+          "tau_q0": -1.197,
+          "tau_q1": -0.667,
+          "tau_q2": -0.197,
+          "tau_q3": -0.14,
+          "tau_L": -1.752,
+          "tau_pc_l8": 1.262,
+          "etaM_l8": 1,
+          "etaQ_l8": 1,
+          "sigma_q0_lh": -1.692,
+          "sigma_q1_lh": -0.838,
+          "sigma_q2_lh": -0.247,
+          "sigma_q3_lh": -0.176,
+          "sigma_L_lh": -2.468,
+          "tau_q0_lh": -1.039,
+          "tau_q1_lh": -0.593,
+          "tau_q2_lh": -0.175,
+          "tau_q3_lh": -0.125,
+          "tau_L_lh": -1.558,
+          "sigma_pc_lh": 13.04,
+          "tau_pc_lh": 1.087,
+          "mp": 29752,
           "Kw": 2,
-          "concrete": {
-            "f_ct": 3.02,
-            "f_c": 32.1
+          "K_crack": 1.2,
+          "fct": 3.02,
+          "fc": 32.1,
+          "gamma": 1.3234,
+          "damageFactors": {
+            "z1m": 1,
+            "z1q": 1,
+            "z2m": 1,
+            "z2q": 1,
+            "z3h": 1,
+            "z3y": 1,
+            "z4y": 1
           }
         }
       },
       "output": {
-        "k1": 0.803,
-        "k2": 3,
-        "k3": 3,
-        "k4": 3,
-        "kFinal": 0.803,
-        "calcTime": "2026-05-20T00:20:47.448+08:00"
+        "k1": 0.9584,
+        "k2": 3.1213,
+        "k3": 3.1372,
+        "k4": 4.2324,
+        "k5": 2.706,
+        "kFinal": 0.9584,
+        "qResult": {
+          "c80": {
+            "q": 0.8778,
+            "meetsRequirement": true
+          },
+          "km98": {
+            "q": 0.8967,
+            "meetsRequirement": true
+          }
+        },
+        "calcTime": "2026-05-22T01:27:51.932+08:00"
       },
       "report": {
         "generated": false,
@@ -61,12 +105,12 @@
       }
     },
     {
-      "id": "CALC1779207520057semrtv",
+      "id": "CALC17793839732619w56p9",
       "bridgeId": "BRG003",
-      "spanIndex": 4,
+      "spanIndex": 3,
       "spanLength": 32,
       "beamType": "专桥2059",
-      "createTime": "2026-05-20T00:18:40.057+08:00",
+      "createTime": "2026-05-22T01:19:33.261+08:00",
       "creator": "当前用户",
       "creatorId": null,
       "input": {
@@ -87,31 +131,75 @@
       },
       "intermediate": {
         "etaM": 1.042,
-        "momentM": 17267.921,
+        "momentM": 15752.81,
         "fixedParams": {
           "mq0": 4248,
           "mq1": 2367.2,
           "mq2": 811.9,
           "mq3": 497.7,
-          "mL": 7512.8,
-          "mp": 29752,
+          "mL": 6294.5,
+          "sigma_q0": -6.52,
+          "sigma_q1": -3.211,
+          "sigma_q2": -0.948,
+          "sigma_q3": -0.675,
+          "sigma_L": -8.539,
+          "sigma_pc_mid": 20.956,
           "etaM": 1.042,
-          "etaL8Q": 1.04,
-          "calcSpan": 32,
+          "tau_q0": -1.197,
+          "tau_q1": -0.667,
+          "tau_q2": -0.197,
+          "tau_q3": -0.14,
+          "tau_L": -1.752,
+          "tau_pc_l8": 1.262,
+          "etaM_l8": 1.052,
+          "etaQ_l8": 1.044,
+          "sigma_q0_lh": -1.692,
+          "sigma_q1_lh": -0.838,
+          "sigma_q2_lh": -0.247,
+          "sigma_q3_lh": -0.176,
+          "sigma_L_lh": -2.468,
+          "tau_q0_lh": -1.039,
+          "tau_q1_lh": -0.593,
+          "tau_q2_lh": -0.175,
+          "tau_q3_lh": -0.125,
+          "tau_L_lh": -1.558,
+          "sigma_pc_lh": 13.04,
+          "tau_pc_lh": 1.087,
+          "mp": 29752,
           "Kw": 2,
-          "concrete": {
-            "f_ct": 3.02,
-            "f_c": 32.1
+          "K_crack": 1.2,
+          "fct": 3.02,
+          "fc": 32.1,
+          "gamma": 1.3234,
+          "damageFactors": {
+            "z1m": 1,
+            "z1q": 1,
+            "z2m": 1,
+            "z2q": 1,
+            "z3h": 1,
+            "z3y": 1,
+            "z4y": 1
           }
         }
       },
       "output": {
-        "k1": 0.744,
-        "k2": 3,
-        "k3": 3,
-        "k4": 3,
-        "kFinal": 0.744,
-        "calcTime": "2026-05-20T00:18:40.057+08:00"
+        "k1": 0.888,
+        "k2": 3.0273,
+        "k3": 3.0426,
+        "k4": 4.0861,
+        "k5": 2.5653,
+        "kFinal": 0.888,
+        "qResult": {
+          "c80": {
+            "q": 0.8778,
+            "meetsRequirement": true
+          },
+          "km98": {
+            "q": 0.8967,
+            "meetsRequirement": false
+          }
+        },
+        "calcTime": "2026-05-22T01:19:33.261+08:00"
       },
       "report": {
         "generated": false,
@@ -120,12 +208,115 @@
       }
     },
     {
-      "id": "CALC1778604405331idkzcy",
-      "bridgeId": "BRG001",
-      "spanIndex": 4,
+      "id": "CALC17793839616449i29lm",
+      "bridgeId": "BRG002",
+      "spanIndex": 3,
       "spanLength": 32,
       "beamType": "专桥2059",
-      "createTime": "2026-05-13T00:46:45.331+08:00",
+      "createTime": "2026-05-22T01:19:21.644+08:00",
+      "creator": "当前用户",
+      "creatorId": null,
+      "input": {
+        "beamPosition": "直线梁",
+        "curveRadius": null,
+        "eccentricityE": 0,
+        "ballastThicknessT": 5,
+        "impactFactor": 1.1935,
+        "damageFactors": {
+          "z1m": 1,
+          "z1q": 1,
+          "z2m": 1,
+          "z2q": 1,
+          "z3h": 1,
+          "z3y": 1,
+          "z4y": 1
+        }
+      },
+      "intermediate": {
+        "etaM": 1,
+        "momentM": 15188.436,
+        "fixedParams": {
+          "mq0": 4248,
+          "mq1": 2367.2,
+          "mq2": 811.9,
+          "mq3": 497.7,
+          "mL": 6294.5,
+          "sigma_q0": -6.52,
+          "sigma_q1": -3.211,
+          "sigma_q2": -0.948,
+          "sigma_q3": -0.675,
+          "sigma_L": -8.539,
+          "sigma_pc_mid": 20.956,
+          "etaM": 1,
+          "tau_q0": -1.197,
+          "tau_q1": -0.667,
+          "tau_q2": -0.197,
+          "tau_q3": -0.14,
+          "tau_L": -1.752,
+          "tau_pc_l8": 1.262,
+          "etaM_l8": 1,
+          "etaQ_l8": 1,
+          "sigma_q0_lh": -1.692,
+          "sigma_q1_lh": -0.838,
+          "sigma_q2_lh": -0.247,
+          "sigma_q3_lh": -0.176,
+          "sigma_L_lh": -2.468,
+          "tau_q0_lh": -1.039,
+          "tau_q1_lh": -0.593,
+          "tau_q2_lh": -0.175,
+          "tau_q3_lh": -0.125,
+          "tau_L_lh": -1.558,
+          "sigma_pc_lh": 13.04,
+          "tau_pc_lh": 1.087,
+          "mp": 29752,
+          "Kw": 2,
+          "K_crack": 1.2,
+          "fct": 3.02,
+          "fc": 32.1,
+          "gamma": 1.3234,
+          "damageFactors": {
+            "z1m": 1,
+            "z1q": 1,
+            "z2m": 1,
+            "z2q": 1,
+            "z3h": 1,
+            "z3y": 1,
+            "z4y": 1
+          }
+        }
+      },
+      "output": {
+        "k1": 0.9584,
+        "k2": 3.1213,
+        "k3": 3.1372,
+        "k4": 4.2324,
+        "k5": 2.706,
+        "kFinal": 0.9584,
+        "qResult": {
+          "c80": {
+            "q": 0.8778,
+            "meetsRequirement": true
+          },
+          "km98": {
+            "q": 0.8967,
+            "meetsRequirement": true
+          }
+        },
+        "calcTime": "2026-05-22T01:19:21.644+08:00"
+      },
+      "report": {
+        "generated": false,
+        "filePath": null,
+        "generateTime": null
+      }
+    },
+    {
+      "id": "CALC17793773542262kd3lw",
+      "bridgeId": "BRG001",
+      "spanIndex": 5,
+      "spanLength": 32,
+      "beamType": "专桥2059",
+      "createTime": "2026-05-21T23:29:14.226+08:00",
       "creator": "当前用户",
       "creatorId": null,
       "input": {
@@ -146,31 +337,75 @@
       },
       "intermediate": {
         "etaM": 1.042,
-        "momentM": 17019.071,
+        "momentM": 15503.96,
         "fixedParams": {
           "mq0": 4248,
           "mq1": 2367.2,
           "mq2": 811.9,
           "mq3": 497.7,
-          "mL": 7512.8,
-          "mp": 29752,
+          "mL": 6294.5,
+          "sigma_q0": -6.52,
+          "sigma_q1": -3.211,
+          "sigma_q2": -0.948,
+          "sigma_q3": -0.675,
+          "sigma_L": -8.539,
+          "sigma_pc_mid": 20.956,
           "etaM": 1.042,
-          "etaL8Q": 1.04,
-          "calcSpan": 32,
+          "tau_q0": -1.197,
+          "tau_q1": -0.667,
+          "tau_q2": -0.197,
+          "tau_q3": -0.14,
+          "tau_L": -1.752,
+          "tau_pc_l8": 1.262,
+          "etaM_l8": 1.052,
+          "etaQ_l8": 1.044,
+          "sigma_q0_lh": -1.692,
+          "sigma_q1_lh": -0.838,
+          "sigma_q2_lh": -0.247,
+          "sigma_q3_lh": -0.176,
+          "sigma_L_lh": -2.468,
+          "tau_q0_lh": -1.039,
+          "tau_q1_lh": -0.593,
+          "tau_q2_lh": -0.175,
+          "tau_q3_lh": -0.125,
+          "tau_L_lh": -1.558,
+          "sigma_pc_lh": 13.04,
+          "tau_pc_lh": 1.087,
+          "mp": 29752,
           "Kw": 2,
-          "concrete": {
-            "f_ct": 3.02,
-            "f_c": 32.1
+          "K_crack": 1.2,
+          "fct": 3.02,
+          "fc": 32.1,
+          "gamma": 1.3234,
+          "damageFactors": {
+            "z1m": 1,
+            "z1q": 1,
+            "z2m": 1,
+            "z2q": 1,
+            "z3h": 1,
+            "z3y": 1,
+            "z4y": 1
           }
         }
       },
       "output": {
-        "k1": 0.7706,
-        "k2": 3,
-        "k3": 3,
-        "k4": 3,
-        "kFinal": 0.7706,
-        "calcTime": "2026-05-13T00:46:45.331+08:00"
+        "k1": 0.9198,
+        "k2": 2.9955,
+        "k3": 3.0108,
+        "k4": 4.054,
+        "k5": 2.5989,
+        "kFinal": 0.9198,
+        "qResult": {
+          "c80": {
+            "q": 0.8778,
+            "meetsRequirement": true
+          },
+          "km98": {
+            "q": 0.8967,
+            "meetsRequirement": true
+          }
+        },
+        "calcTime": "2026-05-21T23:29:14.226+08:00"
       },
       "report": {
         "generated": false,

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, Plus, Calculator, FileText, Trash2, TrendingDown, Info, History } from 'lucide-react';
+import { X, Plus, Calculator, FileText, Trash2, Info, History } from 'lucide-react';
 import type { Bridge } from '../lib/types';
 import { getCalculationsByBridge, deleteCalculation } from '../lib/db';
 
@@ -248,18 +248,7 @@ export default function BridgeDetailModal({ bridge, isOpen, onClose, onCalculate
               )}
             </div>
 
-            {/* K值变化趋势 */}
-            {calcHistory.length > 1 && (
-              <div className="bg-white rounded-xl border border-gray-200 p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <TrendingDown className="w-4 h-4 text-blue-600" />
-                  <h3 className="font-semibold text-gray-800">K值变化趋势</h3>
-                </div>
-                <div className="h-48 flex items-center justify-center bg-gray-50 rounded-lg border border-dashed border-gray-200">
-                  <p className="text-sm text-gray-400">K值变化趋势图（开发中）</p>
-                </div>
-              </div>
-            )}
+
           </div>
         </div>
       </div>

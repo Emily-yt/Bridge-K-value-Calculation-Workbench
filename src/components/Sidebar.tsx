@@ -1,16 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { LayoutDashboard, Calculator, BarChart3, Settings } from 'lucide-react';
+import { LayoutDashboard, Calculator, BarChart3 } from 'lucide-react';
 
-export type ViewId = 'dashboard' | 'bridges' | 'statistics' | 'users';
+export type ViewId = 'dashboard' | 'bridges' | 'statistics';
 
 const MENU_ITEMS: { id: ViewId; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'dashboard', label: '首页', icon: LayoutDashboard },
   { id: 'bridges', label: 'K值计算', icon: Calculator },
   { id: 'statistics', label: '统计分析', icon: BarChart3 },
-];
-
-const SYSTEM_ITEMS: { id: ViewId; label: string; icon: typeof LayoutDashboard }[] = [
-  { id: 'users', label: '系统设置', icon: Settings },
 ];
 
 const MIN_WIDTH = 180;
@@ -117,16 +113,6 @@ export default function Sidebar({ currentView, onViewChange }: SidebarProps) {
             <MenuItem key={item.id} item={item} />
           ))}
         </nav>
-
-        <div className="flex-1" />
-
-        <div className="pt-4 border-t border-gray-200">
-          <nav className="space-y-1">
-            {SYSTEM_ITEMS.map((item) => (
-              <MenuItem key={item.id} item={item} />
-            ))}
-          </nav>
-        </div>
       </div>
 
       <div

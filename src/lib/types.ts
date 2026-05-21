@@ -49,14 +49,22 @@ export interface KValueIntermediate {
   fixedParams: Record<string, unknown>;
 }
 
+/** Q值计算结果 */
+export interface QValueResult {
+  c80: { q: number; meetsRequirement: boolean };
+  km98: { q: number; meetsRequirement: boolean };
+}
+
 /** 计算输出（不含主力弯矩，弯矩在 intermediate） */
 export interface KValueOutput {
   k1: number;
   k2: number;
   k3: number;
   k4: number;
+  k5: number;
   kFinal: number;
   calcTime: string;
+  qResult?: QValueResult | null;
 }
 
 export interface CalculationReport {
@@ -93,35 +101,4 @@ export interface CardVisibility {
   monthlyExpire: boolean;
 }
 
-/** 预警设置 */
-export interface WarningSettings {
-  expireReminderDays: number;
-  kValueThreshold: number;
-  inspectionIntervalDays: number;
-}
 
-/** 报告模板设置 */
-export interface ReportTemplate {
-  unitName: string;
-  reportPrefix: string;
-  defaultReviewer: string;
-  defaultCalculator: string;
-}
-
-/** 用户角色 */
-export type UserRole = 'calculator' | 'admin';
-
-/** 用户 */
-export interface User {
-  id: string;
-  username: string;
-  role: UserRole;
-  enabled: boolean;
-}
-
-/** 系统设置 */
-export interface SystemSettings {
-  warningSettings: WarningSettings;
-  reportTemplate: ReportTemplate;
-  users: User[];
-}

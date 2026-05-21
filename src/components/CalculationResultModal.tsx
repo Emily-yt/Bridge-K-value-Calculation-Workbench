@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { X, Calculator, TrendingDown, FileText, Info, History } from 'lucide-react';
 import type { KValueCalculation, Bridge } from '../lib/types';
+import { QValueTooltip } from './QValueTooltip';
 
 interface CalculationResultModalProps {
   calculation: KValueCalculation | null;
@@ -12,10 +13,23 @@ interface CalculationResultModalProps {
 }
 
 // 获取K值状态
-const getKValueStatus = (k: number) => {
-  if (k >= 2.0) return { label: '承载能力充裕', color: 'text-emerald-600', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200', icon: '✓' };
-  if (k >= 1.5) return { label: '满足运营要求', color: 'text-emerald-600', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200', icon: '✓' };
-  if (k >= 1.0) return { label: '承载能力偏低，建议加强监测', color: 'text-amber-600', bgColor: 'bg-amber-50', borderColor: 'border-amber-200', icon: '⚠️' };
+// 判定逻辑：
+// 1. K >= 1：满足"中-活载"要求
+// 2. K < 1：需计算Q值，若 Q < K 则满足要求
+const getKValueStatus = (k: number, qResult?: { c80: { meetsRequirement: boolean }; km98: { meetsRequirement: boolean } } | null) => {
+  if (k >= 1.0) {
+    return { label: '满足"中-活载"要求', color: 'text-emerald-600', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200', icon: '✓' };
+  }
+  // K < 1 时，检查Q值
+  if (qResult) {
+    const c80Meets = qResult.c80.meetsRequirement;
+    const km98Meets = qResult.km98.meetsRequirement;
+    if (c80Meets && km98Meets) {
+      return { label: '满足要求', color: 'text-emerald-600', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200', icon: '✓' };
+    } else if (c80Meets || km98Meets) {
+      return { label: '部分满足', color: 'text-amber-600', bgColor: 'bg-amber-50', borderColor: 'border-amber-200', icon: '⚠️' };
+    }
+  }
   return { label: '不满足运营要求，需立即处理', color: 'text-red-600', bgColor: 'bg-red-50', borderColor: 'border-red-200', icon: '❌' };
 };
 
@@ -32,7 +46,8 @@ const K_ITEMS = [
   { key: 'k1', label: 'K1', desc: '正截面抗弯强度' },
   { key: 'k2', label: 'K2', desc: '正截面抗裂性' },
   { key: 'k3', label: 'K3', desc: '正截面应力' },
-  { key: 'k4', label: 'K4', desc: '斜截面应力' },
+  { key: 'k4', label: 'K4', desc: '斜截面剪应力' },
+  { key: 'k5', label: 'K5', desc: '斜截面抗裂性' },
 ] as const;
 
 export default function CalculationResultModal({
@@ -60,7 +75,7 @@ export default function CalculationResultModal({
 
   const status = useMemo(() => {
     if (!calculation) return null;
-    return getKValueStatus(calculation.output.kFinal);
+    return getKValueStatus(calculation.output.kFinal, calculation.output.qResult);
   }, [calculation]);
 
   const kChange = useMemo(() => {
@@ -77,6 +92,7 @@ export default function CalculationResultModal({
 
   const { output, input, createTime, spanIndex, beamType } = calculation;
   const { k1, k2, k3, k4, kFinal } = output;
+  const k5 = output.k5 ?? 0; // 旧数据可能没有k5
 
   // 找出最小K值对应的项
   const kValues = [
@@ -84,6 +100,7 @@ export default function CalculationResultModal({
     { key: 'k2', value: k2, label: 'K2' },
     { key: 'k3', value: k3, label: 'K3' },
     { key: 'k4', value: k4, label: 'K4' },
+    { key: 'k5', value: k5, label: 'K5' },
   ];
   const minKItem = kValues.reduce((min, item) => item.value < min.value ? item : min);
 
@@ -149,8 +166,8 @@ export default function CalculationResultModal({
                 <h3 className="font-semibold text-gray-800 text-sm">承载系数</h3>
               </div>
               <div className="p-4">
-                {/* 4个K值 */}
-                <div className="grid grid-cols-4 gap-2 mb-4">
+                {/* 5个K值 */}
+                <div className="grid grid-cols-5 gap-2 mb-4">
                   {K_ITEMS.map((item) => {
                     const kValue = output[item.key];
                     const kStatus = getKItemStatus(kValue);
@@ -170,6 +187,13 @@ export default function CalculationResultModal({
                   <p className="text-xs text-gray-500 mb-1">整体检定承载系数（取{minKItem.label}最小值）</p>
                   <span className="text-xl font-bold text-gray-800">K = {kFinal.toFixed(2)}</span>
                 </div>
+
+                {/* Q值显示（当K < 1时） */}
+                {output.qResult && (
+                  <div className="mt-3 flex items-center justify-center">
+                    <QValueTooltip qResult={output.qResult} />
+                  </div>
+                )}
               </div>
             </div>
 

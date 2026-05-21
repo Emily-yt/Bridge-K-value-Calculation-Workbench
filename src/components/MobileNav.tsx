@@ -1,4 +1,4 @@
-import { LayoutDashboard, Calculator, BarChart3, Settings } from 'lucide-react';
+import { LayoutDashboard, Calculator, BarChart3 } from 'lucide-react';
 import type { ViewId } from './Sidebar';
 
 interface MobileNavProps {
@@ -10,7 +10,6 @@ const MOBILE_ITEMS: { id: ViewId; label: string; icon: typeof LayoutDashboard }[
   { id: 'dashboard', label: '首页', icon: LayoutDashboard },
   { id: 'bridges', label: 'K值', icon: Calculator },
   { id: 'statistics', label: '统计', icon: BarChart3 },
-  { id: 'users', label: '设置', icon: Settings },
 ];
 
 export default function MobileNav({ currentView, onViewChange }: MobileNavProps) {

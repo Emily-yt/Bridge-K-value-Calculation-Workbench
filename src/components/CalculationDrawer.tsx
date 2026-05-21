@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { X, RotateCcw, Play, ChevronDown, ChevronUp, Calculator, CheckCircle, AlertTriangle, XCircle, FileText, Save } from 'lucide-react';
 import type { Bridge, KValueCalculation, BeamSpan } from '../lib/types';
 import { calculateKValue, saveKValueResult } from '../lib/db';
+import { QValueTooltip } from './QValueTooltip';
 
 // 验证桥孔是否支持计算
 function isSpanSupported(span: BeamSpan): boolean {
@@ -40,11 +41,24 @@ interface CalculationDrawerProps {
 type CalculationPhase = 'input' | 'calculating' | 'result';
 
 // 根据K值获取状态
-function getKValueStatus(k: number) {
-  if (k >= 2.0) return { label: '优秀', color: 'green', icon: CheckCircle, text: '承载充裕' };
-  if (k >= 1.5) return { label: '合格', color: 'green', icon: CheckCircle, text: '满足要求' };
-  if (k >= 1.0) return { label: '预警', color: 'orange', icon: AlertTriangle, text: '承载偏低' };
-  return { label: '不合格', color: 'red', icon: XCircle, text: '需立即处理' };
+// 判定逻辑：
+// 1. K >= 1：满足"中-活载"要求
+// 2. K < 1：需计算Q值，若 Q < K 则满足运行列车要求
+function getKValueStatus(k: number, qResult?: { c80: { meetsRequirement: boolean }; km98: { meetsRequirement: boolean } } | null) {
+  if (k >= 1.0) {
+    return { label: '满足要求', color: 'green', icon: CheckCircle, text: '满足中-活载要求' };
+  }
+  // K < 1 时，检查Q值
+  if (qResult) {
+    const c80Meets = qResult.c80.meetsRequirement;
+    const km98Meets = qResult.km98.meetsRequirement;
+    if (c80Meets && km98Meets) {
+      return { label: '满足要求', color: 'green', icon: CheckCircle, text: '满足要求' };
+    } else if (c80Meets || km98Meets) {
+      return { label: '部分满足', color: 'orange', icon: AlertTriangle, text: '部分满足' };
+    }
+  }
+  return { label: '不满足', color: 'red', icon: XCircle, text: '不满足运营要求，需立即处理' };
 }
 
 // 颜色配置
@@ -286,7 +300,7 @@ export default function CalculationDrawer({ bridge, initialSpanIndex, isOpen, on
 
   // 获取当前选中的桥孔
   const currentSpan = spans.find(s => s.index === spanIndex);
-  const kStatus = result ? getKValueStatus(result.output.kFinal) : null;
+  const kStatus = result ? getKValueStatus(result.output.kFinal, result.output.qResult) : null;
   const colors = kStatus ? colorMap[kStatus.color as keyof typeof colorMap] : null;
 
   return (
@@ -349,27 +363,35 @@ export default function CalculationDrawer({ bridge, initialSpanIndex, isOpen, on
                       <kStatus.icon className="w-3 h-3" />
                       {kStatus.text}
                     </div>
+                    {/* Q值tooltip（当K < 1时） */}
+                    {result.output.qResult && <QValueTooltip qResult={result.output.qResult} />}
                   </div>
 
-                  {/* 第二行：K1~K4 */}
-                  <div className="mt-3 flex gap-2">
-                    <div className="flex-1 bg-white/60 rounded px-2 py-1.5 text-center">
+                  {/* 第二行：K1~K5 */}
+                  <div className="mt-3 grid grid-cols-5 gap-2">
+                    <div className="bg-white/60 rounded px-2 py-1.5 text-center">
                       <span className="text-xs text-gray-400">K1</span>
                       <div className="text-sm font-semibold text-gray-700">{result.output.k1.toFixed(2)}</div>
                     </div>
-                    <div className="flex-1 bg-white/60 rounded px-2 py-1.5 text-center">
+                    <div className="bg-white/60 rounded px-2 py-1.5 text-center">
                       <span className="text-xs text-gray-400">K2</span>
                       <div className="text-sm font-semibold text-gray-700">{result.output.k2.toFixed(2)}</div>
                     </div>
-                    <div className="flex-1 bg-white/60 rounded px-2 py-1.5 text-center">
+                    <div className="bg-white/60 rounded px-2 py-1.5 text-center">
                       <span className="text-xs text-gray-400">K3</span>
                       <div className="text-sm font-semibold text-gray-700">{result.output.k3.toFixed(2)}</div>
                     </div>
-                    <div className="flex-1 bg-white/60 rounded px-2 py-1.5 text-center">
+                    <div className="bg-white/60 rounded px-2 py-1.5 text-center">
                       <span className="text-xs text-gray-400">K4</span>
                       <div className="text-sm font-semibold text-gray-700">{result.output.k4.toFixed(2)}</div>
                     </div>
+                    <div className="bg-white/60 rounded px-2 py-1.5 text-center">
+                      <span className="text-xs text-gray-400">K5</span>
+                      <div className="text-sm font-semibold text-gray-700">{(result.output.k5 ?? 0).toFixed(2)}</div>
+                    </div>
                   </div>
+
+
                 </div>
               </div>
             )}

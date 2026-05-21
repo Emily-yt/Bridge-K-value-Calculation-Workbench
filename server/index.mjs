@@ -40,13 +40,19 @@ function getBeijingTime() {
 
 function roundKs(o) {
   const r = (x) => Math.round(x * 10000) / 10000;
-  return {
+  const result = {
     k1: r(o.k1),
     k2: r(o.k2),
     k3: r(o.k3),
     k4: r(o.k4),
+    k5: r(o.k5),
     kFinal: r(o.kFinal),
   };
+  // 如果存在Q值计算结果，一并返回
+  if (o.qResult) {
+    result.qResult = o.qResult;
+  }
+  return result;
 }
 
 let fixedParamsCache = null;

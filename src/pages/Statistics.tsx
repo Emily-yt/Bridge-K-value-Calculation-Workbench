@@ -1,11 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import {
-  BarChart3,
-  TrendingUp,
   AlertTriangle,
   Calculator,
   Building2,
-  Activity,
   Filter,
   ChevronDown,
   ChevronUp,
@@ -16,23 +13,12 @@ import {
   PieChart,
   LineChart,
   List,
-  Info,
-  ChevronRight,
-  Calendar,
-  ArrowRight,
-  BarChart2,
   Target,
   X,
-  Gauge,
-  Layers,
-  Hash,
   Clock,
   AlertCircle,
   CheckCircle2,
-  TrendingDown,
-  Maximize2,
 } from 'lucide-react';
-import type { ValueType } from 'recharts/types/component/DefaultTooltipContent';
 import {
   BarChart,
   Bar,
@@ -40,7 +26,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
   PieChart as RePieChart,
   Pie,
@@ -48,31 +33,56 @@ import {
   LineChart as ReLineChart,
   Line,
   ReferenceLine,
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-  Radar,
 } from 'recharts';
 import { getBridges, getCalculations } from '../lib/db';
-import type { Bridge, KValueCalculation, BeamSpan } from '../lib/types';
+import type { Bridge, KValueCalculation } from '../lib/types';
+import { QValueTooltip } from '../components/QValueTooltip';
 
 // ============ 常量定义 ============
+// 判定逻辑（四级分类）：
+// 1. K >= 1.0：满足要求（绿色）
+// 2. K < 1.0 且 Q值均满足（c80和km98都满足）：满足要求（绿色）
+// 3. K < 1.0 且 Q值有且仅有1个不满足：部分满足（橙黄色）
+// 4. K < 1.0 且 Q值均不满足：不满足要求（红色）
 export const K_VALUE_LEVELS = [
-  { key: 'safe', label: '安全充裕', min: 2.0, color: '#10b981', bgColor: '#ecfdf5' },
-  { key: 'normal', label: '满足运营', min: 1.5, color: '#3b82f6', bgColor: '#eff6ff' },
-  { key: 'low', label: '承载偏低', min: 1.0, color: '#f59e0b', bgColor: '#fffbeb' },
-  { key: 'danger', label: '不满足运营', min: -Infinity, color: '#ef4444', bgColor: '#fef2f2' },
+  { key: 'safe', label: '满足要求', min: 1.0, color: '#10b981', bgColor: '#ecfdf5' },
+  { key: 'partial', label: '部分满足', min: -Infinity, color: '#f59e0b', bgColor: '#fffbeb' },
+  { key: 'danger', label: '不满足要求', min: -Infinity, color: '#ef4444', bgColor: '#fef2f2' },
 ] as const;
 
 export const CHART_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316'] as const;
 
-// 获取 K 值等级
+// 获取 K 值等级（仅基于K值，不考虑Q值）
 const getKValueLevel = (kValue: number) => {
-  for (const level of K_VALUE_LEVELS) {
-    if (kValue >= level.min) return level;
+  if (kValue >= 1.0) return K_VALUE_LEVELS[0]; // safe
+  return K_VALUE_LEVELS[2]; // danger (默认，实际应根据Q值判断)
+};
+
+// 获取 K 值等级（考虑Q值）- 四级分类
+// 1. K >= 1.0：满足要求（绿色）
+// 2. K < 1.0 且 Q值均满足：满足要求（绿色）
+// 3. K < 1.0 且 Q值有且仅有1个不满足：部分满足（橙黄色）
+// 4. K < 1.0 且 Q值均不满足：不满足要求（红色）
+const getKValueLevelWithQ = (kValue: number, qResult?: { c80: { meetsRequirement: boolean }; km98: { meetsRequirement: boolean } } | null) => {
+  // K >= 1.0 直接满足
+  if (kValue >= 1.0) return K_VALUE_LEVELS[0]; // safe
+  
+  // K < 1.0 时需要检查Q值
+  if (!qResult) return K_VALUE_LEVELS[2]; // danger (无Q值数据，默认不满足)
+  
+  const c80Ok = qResult.c80.meetsRequirement;
+  const km98Ok = qResult.km98.meetsRequirement;
+  
+  if (c80Ok && km98Ok) {
+    // Q值均满足
+    return K_VALUE_LEVELS[0]; // safe
+  } else if (c80Ok || km98Ok) {
+    // 有且仅有1个不满足
+    return K_VALUE_LEVELS[1]; // partial
+  } else {
+    // Q值均不满足
+    return K_VALUE_LEVELS[2]; // danger
   }
-  return K_VALUE_LEVELS[K_VALUE_LEVELS.length - 1];
 };
 
 // 获取 K 值等级标签（带颜色点）
@@ -80,7 +90,7 @@ const KValueLevelBadge = ({ kValue, showValue = true, showLabel = true }: { kVal
   const level = getKValueLevel(kValue);
   return (
     <span className="inline-flex items-center gap-1.5">
-      {showValue && <span>{kValue.toFixed(4)}</span>}
+      {showValue && <span>{kValue.toFixed(2)}</span>}
       {showLabel && (
         <span
           className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
@@ -123,49 +133,13 @@ interface SpanCalculationData {
   k2: number;
   k3: number;
   k4: number;
+  k5: number;
   kFinal: number;
   createTime: string;
-}
-
-// ============ 统计卡片组件 ============
-interface StatCardProps {
-  title: string;
-  value: string | number;
-  subtitle?: string;
-  icon: React.ElementType;
-  color: 'blue' | 'green' | 'yellow' | 'red' | 'purple';
-  onClick?: () => void;
-  highlight?: boolean;
-}
-
-function StatCard({ title, value, subtitle, icon: Icon, color, onClick, highlight }: StatCardProps) {
-  const colorClasses = {
-    blue: 'bg-blue-50 text-blue-600 border-blue-100',
-    green: 'bg-green-50 text-green-600 border-green-100',
-    yellow: 'bg-yellow-50 text-yellow-600 border-yellow-100',
-    red: 'bg-red-50 text-red-600 border-red-100',
-    purple: 'bg-purple-50 text-purple-600 border-purple-100',
-  };
-
-  return (
-    <div
-      onClick={onClick}
-      className={`bg-white rounded-xl p-6 border ${highlight ? 'border-red-300 ring-2 ring-red-100' : 'border-gray-100'} shadow-sm hover:shadow-md transition-all ${
-        onClick ? 'cursor-pointer' : ''
-      }`}
-    >
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <p className="text-sm font-medium text-gray-500 mb-1">{title}</p>
-          <h3 className="text-2xl font-bold text-gray-900">{value}</h3>
-          {subtitle && <p className="text-xs text-gray-400 mt-1">{subtitle}</p>}
-        </div>
-        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${colorClasses[color]}`}>
-          <Icon className="w-6 h-6" />
-        </div>
-      </div>
-    </div>
-  );
+  qResult?: {
+    c80: { q: number; meetsRequirement: boolean };
+    km98: { q: number; meetsRequirement: boolean };
+  } | null;
 }
 
 // ============ 空状态组件 ============
@@ -221,7 +195,6 @@ export default function Statistics() {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
   const [timeRange, setTimeRange] = useState<TimeRange>('all');
   const [selectedBridgeId, setSelectedBridgeId] = useState<string | null>(null);
-  const [expandedSpan, setExpandedSpan] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBridgeIdsForChart, setSelectedBridgeIdsForChart] = useState<Set<string>>(new Set());
   const [kValueAggregation, setKValueAggregation] = useState<'min' | 'avg'>('min');
@@ -230,10 +203,10 @@ export default function Statistics() {
   const [rankingOrder, setRankingOrder] = useState<'asc' | 'desc'>('asc');
   // 桥梁分析Tab新状态
   const [selectedSpanForDetail, setSelectedSpanForDetail] = useState<number | null>(null);
-  const [spanSearchTerm, setSpanSearchTerm] = useState('');
-  const [spanFilterStatus, setSpanFilterStatus] = useState<'all' | 'calculated' | 'uncalculated' | 'danger' | 'low'>('all');
+  const [spanSearchTerm] = useState('');
+  const [spanFilterStatus] = useState<'all' | 'calculated' | 'uncalculated' | 'danger' | 'partial' | 'low'>('all');
   const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
-  const [spanTableSort, setSpanTableSort] = useState<{ key: 'spanIndex' | 'kFinal' | 'k1' | 'k2' | 'k3' | 'k4'; order: 'asc' | 'desc' }>({ key: 'spanIndex', order: 'asc' });
+  const [spanTableSort, setSpanTableSort] = useState<{ key: 'spanIndex' | 'kFinal' | 'k1' | 'k2' | 'k3' | 'k4' | 'k5'; order: 'asc' | 'desc' }>({ key: 'spanIndex', order: 'asc' });
   // 孔跨表格筛选状态
   const [spanTableFilter, setSpanTableFilter] = useState<{
     spanIndices: number[];
@@ -286,8 +259,10 @@ export default function Statistics() {
         k2: c.output.k2,
         k3: c.output.k3,
         k4: c.output.k4,
+        k5: c.output.k5 ?? 999, // 旧数据可能没有k5，给一个默认值避免计算错误
         kFinal: c.output.kFinal,
         createTime: c.createTime,
+        qResult: c.output.qResult,
       }));
 
       // 按孔跨分组，取每个孔跨最新的计算记录
@@ -313,12 +288,13 @@ export default function Statistics() {
       if (shortBoardSpans.length > 0) {
         const shortBoardCalc = latestCalcs.find((c) => c.spanIndex === shortBoardSpans[0]);
         if (shortBoardCalc) {
-          const { k1, k2, k3, k4 } = shortBoardCalc;
-          const minK = Math.min(k1, k2, k3, k4);
+          const { k1, k2, k3, k4, k5 } = shortBoardCalc;
+          const minK = Math.min(k1, k2, k3, k4, k5);
           if (minK === k1) controlComponent = 'K1 正截面抗弯强度';
           else if (minK === k2) controlComponent = 'K2 正截面抗裂性';
           else if (minK === k3) controlComponent = 'K3 正截面应力';
           else if (minK === k4) controlComponent = 'K4 斜截面抗剪';
+          else if (minK === k5) controlComponent = 'K5 斜截面抗裂性';
         }
       }
 
@@ -351,8 +327,32 @@ export default function Statistics() {
   const overviewStats = useMemo(() => {
     const totalBridges = bridges.length;
     const evaluatedBridges = bridgeKValueData.filter((b) => b.bridgeKValue !== null);
-    const problemBridges = evaluatedBridges.filter((b) => (b.bridgeKValue ?? 0) < 1.5);
-    const dangerBridges = evaluatedBridges.filter((b) => (b.bridgeKValue ?? 0) < 1.0);
+    
+    // 判定逻辑（四级分类）：
+    // 1. K >= 1.0：满足要求（绿色）
+    // 2. K < 1.0 且 Q值均满足：满足要求（绿色）
+    // 3. K < 1.0 且 Q值有且仅有1个不满足：部分满足（橙黄色）
+    // 4. K < 1.0 且 Q值均不满足：不满足要求（红色）
+    const getBridgeLevel = (bridge: BridgeKValueData): 'safe' | 'partial' | 'danger' => {
+      if (!bridge.bridgeKValue) return 'danger';
+      if (bridge.bridgeKValue >= 1.0) return 'safe';
+      // K < 1 时，检查短板孔跨的Q值结果
+      const minKSpan = bridge.spanCalculations.reduce((min, span) => 
+        span.kFinal < min.kFinal ? span : min
+      );
+      if (!minKSpan.qResult) return 'danger';
+      
+      const c80Ok = minKSpan.qResult.c80.meetsRequirement;
+      const km98Ok = minKSpan.qResult.km98.meetsRequirement;
+      
+      if (c80Ok && km98Ok) return 'safe';
+      if (c80Ok || km98Ok) return 'partial';
+      return 'danger';
+    };
+    
+    const safeBridges = evaluatedBridges.filter((b) => getBridgeLevel(b) === 'safe');
+    const partialBridges = evaluatedBridges.filter((b) => getBridgeLevel(b) === 'partial');
+    const dangerBridges = evaluatedBridges.filter((b) => getBridgeLevel(b) === 'danger');
 
     // 计算覆盖
     const calculatedBridgeCount = evaluatedBridges.length;
@@ -363,12 +363,11 @@ export default function Statistics() {
     const calculatedSpanCount = evaluatedBridges.reduce((sum, b) => sum + b.calculatedSpans, 0);
     const spanCoverage = totalSpans > 0 ? Math.round((calculatedSpanCount / totalSpans) * 100) : 0;
 
-    // K值等级分布（按桥梁数量）
+    // K值等级分布（按桥梁数量）- 四级分类
     const kLevelDistribution = {
-      safe: evaluatedBridges.filter((b) => (b.bridgeKValue ?? 0) >= 2.0).length,
-      normal: evaluatedBridges.filter((b) => (b.bridgeKValue ?? 0) >= 1.5 && (b.bridgeKValue ?? 0) < 2.0).length,
-      low: evaluatedBridges.filter((b) => (b.bridgeKValue ?? 0) >= 1.0 && (b.bridgeKValue ?? 0) < 1.5).length,
-      danger: evaluatedBridges.filter((b) => (b.bridgeKValue ?? 0) < 1.0).length,
+      safe: safeBridges.length,
+      partial: partialBridges.length,
+      danger: dangerBridges.length,
     };
 
     // 桥梁K值排名（按桥梁K值升序）
@@ -407,7 +406,7 @@ export default function Statistics() {
 
     return {
       totalBridges,
-      problemBridgeCount: problemBridges.length,
+      problemBridgeCount: dangerBridges.length,
       dangerBridgeCount: dangerBridges.length,
       bridgeCoverage,
       calculatedBridgeCount,
@@ -436,13 +435,16 @@ export default function Statistics() {
     return dates.map((date) => {
       const dayCalcs = bridgeCalcs.filter((c) => c.createTime.startsWith(date));
       const spanKValues: Record<string, number | null> = {};
+      // 记录每个孔跨的Q值结果（用于判定等级）
+      const spanQResults: Record<number, SpanCalculationData['qResult']> = {};
 
-      // 获取每个孔跨在该日期的最新K值
+      // 获取每个孔跨在该日期的最新K值和Q值
       selectedBridgeData.spanCalculations.forEach((span) => {
         const spanDayCalcs = dayCalcs.filter((c) => c.spanIndex === span.spanIndex);
         if (spanDayCalcs.length > 0) {
           const latest = spanDayCalcs.sort((a, b) => new Date(b.createTime).getTime() - new Date(a.createTime).getTime())[0];
           spanKValues[`span_${span.spanIndex}`] = latest.output.kFinal;
+          spanQResults[span.spanIndex] = latest.output.qResult;
         } else {
           spanKValues[`span_${span.spanIndex}`] = null;
         }
@@ -451,50 +453,108 @@ export default function Statistics() {
       // 计算桥梁K值
       const kValues = Object.values(spanKValues).filter((v): v is number => v !== null);
       const bridgeK = kValues.length > 0 ? Math.min(...kValues) : null;
+      
+      // 找到短板孔跨的Q值结果
+      let shortBoardQResult: SpanCalculationData['qResult'] = null;
+      if (bridgeK !== null) {
+        const shortBoardSpanIndex = selectedBridgeData.spanCalculations.find((span) => {
+          const spanK = spanKValues[`span_${span.spanIndex}`];
+          return spanK === bridgeK;
+        })?.spanIndex;
+        if (shortBoardSpanIndex !== undefined) {
+          shortBoardQResult = spanQResults[shortBoardSpanIndex];
+        }
+      }
 
       return {
         date,
         bridgeK,
+        shortBoardQResult,
         ...spanKValues,
       };
     });
   }, [selectedBridgeData, selectedBridgeId, filteredCalculations]);
 
   // K值等级分布数据（根据选择的桥梁动态计算）
+  // 判定逻辑：
+  // 1. K >= 1：满足"中-活载"要求
+  // 2. K < 1：需计算Q值
+  // 判定逻辑（四级分类）：
+  // 1. K >= 1.0：满足要求（绿色）
+  // 2. K < 1.0 且 Q值均满足：满足要求（绿色）
+  // 3. K < 1.0 且 Q值有且仅有1个不满足：部分满足（橙黄色）
+  // 4. K < 1.0 且 Q值均不满足：不满足要求（红色）
   const kLevelDistributionData = useMemo(() => {
+    // 获取K值等级（考虑Q值）- 四级分类
+    const getLevel = (kFinal: number, qResult?: SpanCalculationData['qResult']) => {
+      // K >= 1.0 直接满足
+      if (kFinal >= 1.0) return 'safe';
+      
+      // K < 1.0 时需要检查Q值
+      if (!qResult) return 'danger';
+      
+      const c80Ok = qResult.c80.meetsRequirement;
+      const km98Ok = qResult.km98.meetsRequirement;
+      
+      if (c80Ok && km98Ok) {
+        // Q值均满足
+        return 'safe';
+      } else if (c80Ok || km98Ok) {
+        // 有且仅有1个不满足
+        return 'partial';
+      } else {
+        // Q值均不满足
+        return 'danger';
+      }
+    };
+
     if (selectedBridgeForDistribution === 'all') {
       // 全部桥梁：按桥梁K值统计
       const evaluatedBridges = bridgeKValueData.filter((b) => b.bridgeKValue !== null);
+      let safeCount = 0;
+      let partialCount = 0;
+      let dangerCount = 0;
+
+      evaluatedBridges.forEach((bridge) => {
+        // 找到桥梁的短板孔跨（K值最小的孔跨）
+        const minKSpan = bridge.spanCalculations.reduce((min, span) => 
+          span.kFinal < min.kFinal ? span : min
+        );
+        
+        const level = getLevel(minKSpan.kFinal, minKSpan.qResult);
+        if (level === 'safe') safeCount++;
+        else if (level === 'partial') partialCount++;
+        else dangerCount++;
+      });
+
       return {
-        safe: evaluatedBridges.filter((b) => (b.bridgeKValue ?? 0) >= 2.0).length,
-        normal: evaluatedBridges.filter((b) => (b.bridgeKValue ?? 0) >= 1.5 && (b.bridgeKValue ?? 0) < 2.0).length,
-        low: evaluatedBridges.filter((b) => (b.bridgeKValue ?? 0) >= 1.0 && (b.bridgeKValue ?? 0) < 1.5).length,
-        danger: evaluatedBridges.filter((b) => (b.bridgeKValue ?? 0) < 1.0).length,
+        safe: safeCount,
+        partial: partialCount,
+        danger: dangerCount,
         isBySpan: false,
       };
     } else {
       // 特定桥梁：按孔跨K值统计
       const bridgeData = bridgeKValueData.find((b) => b.bridgeId === selectedBridgeForDistribution);
       if (!bridgeData || bridgeData.spanCalculations.length === 0) {
-        return { safe: 0, normal: 0, low: 0, danger: 0, isBySpan: true };
+        return { safe: 0, partial: 0, danger: 0, isBySpan: true };
       }
       
-      // 获取每个孔跨的最新K值
-      const spanKValues = bridgeData.spanCalculations.map((span) => {
-        const spanCalcs = filteredCalculations.filter(
-          (c) => c.bridgeId === selectedBridgeForDistribution && c.spanIndex === span.spanIndex
-        );
-        if (spanCalcs.length === 0) return null;
-        // 取最新的计算结果
-        const latest = spanCalcs.sort((a, b) => new Date(b.createTime).getTime() - new Date(a.createTime).getTime())[0];
-        return latest.output.kFinal;
-      }).filter((k): k is number => k !== null);
+      let safeCount = 0;
+      let partialCount = 0;
+      let dangerCount = 0;
+
+      bridgeData.spanCalculations.forEach((span) => {
+        const level = getLevel(span.kFinal, span.qResult);
+        if (level === 'safe') safeCount++;
+        else if (level === 'partial') partialCount++;
+        else dangerCount++;
+      });
 
       return {
-        safe: spanKValues.filter((k) => k >= 2.0).length,
-        normal: spanKValues.filter((k) => k >= 1.5 && k < 2.0).length,
-        low: spanKValues.filter((k) => k >= 1.0 && k < 1.5).length,
-        danger: spanKValues.filter((k) => k < 1.0).length,
+        safe: safeCount,
+        partial: partialCount,
+        danger: dangerCount,
         isBySpan: true,
       };
     }
@@ -504,7 +564,12 @@ export default function Statistics() {
   const detailData = useMemo(() => {
     return filteredCalculations.map((calc) => {
       const bridge = bridges.find((b) => b.id === calc.bridgeId);
-      const level = getKValueLevel(calc.output.kFinal);
+      // 判定逻辑（四级分类）
+      // 1. K >= 1.0：满足要求（绿色）
+      // 2. K < 1.0 且 Q值均满足：满足要求（绿色）
+      // 3. K < 1.0 且 Q值有且仅有1个不满足：部分满足（橙黄色）
+      // 4. K < 1.0 且 Q值均不满足：不满足要求（红色）
+      const level = getKValueLevelWithQ(calc.output.kFinal, calc.output.qResult);
       return {
         id: calc.id,
         bridgeName: bridge?.bridgeName || '-',
@@ -515,6 +580,7 @@ export default function Statistics() {
         k2: calc.output.k2,
         k3: calc.output.k3,
         k4: calc.output.k4,
+        k5: calc.output.k5 ?? 999, // 旧数据可能没有k5，给一个默认值避免计算错误
         kFinal: calc.output.kFinal,
         level: level.label,
         levelColor: level.color,
@@ -544,7 +610,7 @@ export default function Statistics() {
       a.click();
       URL.revokeObjectURL(url);
     } else {
-      const headers = ['桥梁名称', '所属线路', '孔跨序号', '梁型', 'K1抗弯', 'K2抗裂', 'K3应力', 'K4抗剪', 'K最终', 'K值等级', '计算时间', '计算人'];
+      const headers = ['桥梁名称', '所属线路', '孔跨序号', '梁型', 'K1抗弯', 'K2抗裂', 'K3应力', 'K4抗剪', 'K5抗裂', 'K最终', 'K值等级', '计算时间', '计算人'];
       const rows = detailData.map((d) => [
         d.bridgeName,
         d.lineName,
@@ -554,6 +620,7 @@ export default function Statistics() {
         d.k2,
         d.k3,
         d.k4,
+        d.k5,
         d.kFinal,
         d.level,
         d.createTime,
@@ -576,12 +643,6 @@ export default function Statistics() {
     { id: 'bridge', label: '桥梁分析', icon: Building2 },
     { id: 'detail', label: '明细数据', icon: List },
   ];
-
-  // 处理桥梁选择
-  const handleBridgeSelect = (bridgeId: string) => {
-    setSelectedBridgeId(bridgeId);
-    setActiveTab('bridge');
-  };
 
   if (loading) {
     return (
@@ -674,16 +735,15 @@ export default function Statistics() {
                     </div>
                   </div>
                 </div>
-                {(kLevelDistributionData.safe + kLevelDistributionData.normal + kLevelDistributionData.low + kLevelDistributionData.danger) > 0 ? (
+                {(kLevelDistributionData.safe + kLevelDistributionData.partial + kLevelDistributionData.danger) > 0 ? (
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
                       <RePieChart>
                         <Pie
                           data={[
-                            { name: '安全充裕', value: kLevelDistributionData.safe, color: K_VALUE_LEVELS[0].color },
-                            { name: '满足运营', value: kLevelDistributionData.normal, color: K_VALUE_LEVELS[1].color },
-                            { name: '承载偏低', value: kLevelDistributionData.low, color: K_VALUE_LEVELS[2].color },
-                            { name: '不满足运营', value: kLevelDistributionData.danger, color: K_VALUE_LEVELS[3].color },
+                            { name: '满足要求', value: kLevelDistributionData.safe, color: K_VALUE_LEVELS[0].color },
+                            { name: '部分满足', value: kLevelDistributionData.partial, color: K_VALUE_LEVELS[1].color },
+                            { name: '不满足要求', value: kLevelDistributionData.danger, color: K_VALUE_LEVELS[2].color },
                           ].filter((d) => d.value > 0)}
                           cx="50%"
                           cy="50%"
@@ -694,12 +754,19 @@ export default function Statistics() {
                           isAnimationActive={false}
                           labelLine={{ stroke: '#9ca3af', strokeWidth: 1 }}
                           label={(props) => {
-                            const { name, percent, fill } = props;
+                            const { name, percent, index } = props;
+                            // 根据索引获取对应的颜色
+                            const data = [
+                              { name: '满足要求', value: kLevelDistributionData.safe, color: K_VALUE_LEVELS[0].color },
+                              { name: '部分满足', value: kLevelDistributionData.partial, color: K_VALUE_LEVELS[1].color },
+                              { name: '不满足要求', value: kLevelDistributionData.danger, color: K_VALUE_LEVELS[2].color },
+                            ].filter((d) => d.value > 0);
+                            const color = data[index as number]?.color || K_VALUE_LEVELS[0].color;
                             return (
                               <text
                                 x={props.x}
                                 y={props.y}
-                                fill={fill}
+                                fill={color}
                                 textAnchor={props.textAnchor}
                                 dominantBaseline={props.dominantBaseline}
                                 style={{ fontSize: '12px', fontWeight: 500 }}
@@ -710,10 +777,9 @@ export default function Statistics() {
                           }}
                         >
                           {[
-                            { name: '安全充裕', value: kLevelDistributionData.safe, color: K_VALUE_LEVELS[0].color },
-                            { name: '满足运营', value: kLevelDistributionData.normal, color: K_VALUE_LEVELS[1].color },
-                            { name: '承载偏低', value: kLevelDistributionData.low, color: K_VALUE_LEVELS[2].color },
-                            { name: '不满足运营', value: kLevelDistributionData.danger, color: K_VALUE_LEVELS[3].color },
+                            { name: '满足要求', value: kLevelDistributionData.safe, color: K_VALUE_LEVELS[0].color },
+                            { name: '部分满足', value: kLevelDistributionData.partial, color: K_VALUE_LEVELS[1].color },
+                            { name: '不满足要求', value: kLevelDistributionData.danger, color: K_VALUE_LEVELS[2].color },
                           ]
                             .filter((d) => d.value > 0)
                             .map((entry, index) => (
@@ -845,9 +911,10 @@ export default function Statistics() {
                               boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
                               padding: '8px 12px',
                             }}
-                            formatter={(value: number, name: string, props: { payload: { level: typeof K_VALUE_LEVELS[0]; yearMonth: string } }) => {
+                            formatter={(value, _name, props) => {
                               const aggLabel = kValueAggregation === 'min' ? '最小K值' : '平均K值';
-                              return [`${value.toFixed(4)} (${props.payload.level.label})`, aggLabel];
+                              const level = (props?.payload as { level?: typeof K_VALUE_LEVELS[0] })?.level;
+                              return [`${Number(value).toFixed(2)} (${level?.label ?? ''})`, aggLabel];
                             }}
                             labelFormatter={(label) => label}
                             labelStyle={{ color: '#374151', fontWeight: 500, fontSize: '13px' }}
@@ -935,7 +1002,32 @@ export default function Statistics() {
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {overviewStats.bridgeRanking.map((row) => {
-                      const isOperational = row.bridgeKValue >= 1.0;
+                      // 判定逻辑（四级分类）
+                      // 1. K >= 1.0：满足要求（绿色）
+                      // 2. K < 1.0 且 Q值均满足：满足要求（绿色）
+                      // 3. K < 1.0 且 Q值有且仅有1个不满足：部分满足（橙黄色）
+                      // 4. K < 1.0 且 Q值均不满足：不满足要求（红色）
+                      const getOperationalLevel = (): { level: 'safe' | 'partial' | 'danger'; label: string } => {
+                        if (row.bridgeKValue >= 1.0) {
+                          return { level: 'safe', label: '满足要求' };
+                        }
+                        // 查找该桥梁的短板孔跨Q值结果
+                        const bridgeData = bridgeKValueData.find(b => b.bridgeId === row.bridgeId);
+                        if (bridgeData && bridgeData.spanCalculations.length > 0) {
+                          const minKSpan = bridgeData.spanCalculations.reduce((min, span) =>
+                            span.kFinal < min.kFinal ? span : min
+                          );
+                          if (minKSpan.qResult) {
+                            const c80Ok = minKSpan.qResult.c80.meetsRequirement;
+                            const km98Ok = minKSpan.qResult.km98.meetsRequirement;
+                            if (c80Ok && km98Ok) return { level: 'safe', label: '满足要求' };
+                            if (c80Ok || km98Ok) return { level: 'partial', label: '部分满足' };
+                          }
+                        }
+                        return { level: 'danger', label: '不满足要求' };
+                      };
+                      const operationalStatus = getOperationalLevel();
+                      const levelConfig = K_VALUE_LEVELS.find(l => l.key === operationalStatus.level) || K_VALUE_LEVELS[2];
                       return (
                         <tr
                           key={row.bridgeId}
@@ -955,17 +1047,15 @@ export default function Statistics() {
                             {row.calculatedSpans}/{row.spanCount}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm">
-                            {isOperational ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                                <CheckCircle2 className="w-3 h-3" />
-                                满足
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
-                                <AlertCircle className="w-3 h-3" />
-                                不满足
-                              </span>
-                            )}
+                            <span
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
+                              style={{ backgroundColor: levelConfig.bgColor, color: levelConfig.color }}
+                            >
+                              {operationalStatus.level === 'safe' && <CheckCircle2 className="w-3 h-3" />}
+                              {operationalStatus.level === 'partial' && <AlertTriangle className="w-3 h-3" />}
+                              {operationalStatus.level === 'danger' && <AlertCircle className="w-3 h-3" />}
+                              {operationalStatus.label}
+                            </span>
                           </td>
                         </tr>
                       );
@@ -1048,9 +1138,33 @@ export default function Statistics() {
                           <p className="text-sm text-gray-500 mb-1">桥梁K值</p>
                           <p className="text-3xl font-bold text-gray-900">{selectedBridgeData.bridgeKValue.toFixed(2)}</p>
                           {(() => {
-                            const level = getKValueLevel(selectedBridgeData.bridgeKValue!);
+                            // 判定逻辑（四级分类）
+                            // 1. K >= 1.0：满足要求（绿色）
+                            // 2. K < 1.0 且 Q值均满足：满足要求（绿色）
+                            // 3. K < 1.0 且 Q值有且仅有1个不满足：部分满足（橙黄色）
+                            // 4. K < 1.0 且 Q值均不满足：不满足要求（红色）
+                            const kFinal = selectedBridgeData.bridgeKValue!;
+                            let level: typeof K_VALUE_LEVELS[number] = K_VALUE_LEVELS[0]; // safe
+                            if (kFinal < 1.0 && selectedBridgeData.spanCalculations.length > 0) {
+                              const minKSpan = selectedBridgeData.spanCalculations.reduce((min, span) =>
+                                span.kFinal < min.kFinal ? span : min
+                              );
+                              if (minKSpan.qResult) {
+                                const c80Ok = minKSpan.qResult.c80.meetsRequirement;
+                                const km98Ok = minKSpan.qResult.km98.meetsRequirement;
+                                if (c80Ok && km98Ok) {
+                                  level = K_VALUE_LEVELS[0]; // safe
+                                } else if (c80Ok || km98Ok) {
+                                  level = K_VALUE_LEVELS[1]; // partial
+                                } else {
+                                  level = K_VALUE_LEVELS[2]; // danger
+                                }
+                              } else {
+                                level = K_VALUE_LEVELS[2]; // danger
+                              }
+                            }
                             return (
-                              <span 
+                              <span
                                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium mt-2"
                                 style={{ backgroundColor: level.bgColor, color: level.color }}
                               >
@@ -1142,19 +1256,15 @@ export default function Statistics() {
                   <div className="flex items-center gap-4 text-xs text-gray-500">
                     <span className="flex items-center gap-1">
                       <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: K_VALUE_LEVELS[0].color }} />
-                      安全充裕
+                      满足要求
                     </span>
                     <span className="flex items-center gap-1">
                       <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: K_VALUE_LEVELS[1].color }} />
-                      满足运营
+                      部分满足
                     </span>
                     <span className="flex items-center gap-1">
                       <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: K_VALUE_LEVELS[2].color }} />
-                      承载偏低
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: K_VALUE_LEVELS[3].color }} />
-                      不满足运营
+                      不满足要求
                     </span>
                   </div>
                 </div>
@@ -1170,7 +1280,11 @@ export default function Statistics() {
                         return spans.map((spanIndex) => {
                           const spanCalc = selectedBridgeData.spanCalculations.find((c) => c.spanIndex === spanIndex);
                           const isShortBoard = selectedBridgeData.shortBoardSpans.includes(spanIndex);
-                          const level = spanCalc ? getKValueLevel(spanCalc.kFinal) : null;
+                          // 判定逻辑（考虑Q值）
+                          let level = null;
+                          if (spanCalc) {
+                            level = getKValueLevelWithQ(spanCalc.kFinal, spanCalc.qResult);
+                          }
                           return {
                             spanIndex: `第${spanIndex}孔`,
                             kValue: spanCalc ? spanCalc.kFinal : 0,
@@ -1184,8 +1298,10 @@ export default function Statistics() {
                           if (spanFilterStatus === 'all') return true;
                           if (spanFilterStatus === 'calculated') return d.isCalculated;
                           if (spanFilterStatus === 'uncalculated') return !d.isCalculated;
-                          if (spanFilterStatus === 'danger') return d.kValue < 1.0;
-                          if (spanFilterStatus === 'low') return d.kValue < 1.5 && d.kValue >= 1.0;
+                          // 判定逻辑（考虑Q值）：从color判断等级
+                          if (spanFilterStatus === 'danger') return d.color === (K_VALUE_LEVELS[2]!.color);
+                          if (spanFilterStatus === 'partial') return d.color === (K_VALUE_LEVELS[1]!.color);
+                          if (spanFilterStatus === 'low') return d.color === (K_VALUE_LEVELS[0]!.color);
                           return true;
                         });
                       })()}
@@ -1237,15 +1353,14 @@ export default function Statistics() {
                           return null;
                         }}
                       />
-                      <ReferenceLine y={1.0} stroke="#ef4444" strokeDasharray="3 3" />
-                      <ReferenceLine y={1.5} stroke="#f59e0b" strokeDasharray="3 3" />
-                      <ReferenceLine y={2.0} stroke="#3b82f6" strokeDasharray="3 3" />
+                      <ReferenceLine y={1.0} stroke="#ef4444" strokeDasharray="3 3" label={{ value: 'K=1.0（临界值）', position: 'right', fill: '#ef4444', fontSize: 10 }} />
                       <Bar
                         dataKey="kValue"
                         radius={[4, 4, 0, 0]}
                         onClick={(data) => {
-                          if (data.isCalculated) {
-                            setSelectedSpanForDetail(data.rawIndex);
+                          const d = data as { isCalculated?: boolean; rawIndex?: number };
+                          if (d.isCalculated && d.rawIndex) {
+                            setSelectedSpanForDetail(d.rawIndex);
                             setDetailDrawerOpen(true);
                           }
                         }}
@@ -1257,11 +1372,19 @@ export default function Statistics() {
                           }
                           return spans.map((spanIndex) => {
                             const spanCalc = selectedBridgeData.spanCalculations.find((c) => c.spanIndex === spanIndex);
-                            const level = spanCalc ? getKValueLevel(spanCalc.kFinal) : null;
+                            // 判定逻辑（四级分类）
+                            // 1. K >= 1.0：满足要求（绿色）
+                            // 2. K < 1.0 且 Q值均满足：满足要求（绿色）
+                            // 3. K < 1.0 且 Q值有且仅有1个不满足：部分满足（橙黄色）
+                            // 4. K < 1.0 且 Q值均不满足：不满足要求（红色）
+                            let color = '#e5e7eb';
+                            if (spanCalc) {
+                              color = getKValueLevelWithQ(spanCalc.kFinal, spanCalc.qResult).color;
+                            }
                             return (
                               <Cell
                                 key={spanIndex}
-                                fill={level?.color || '#e5e7eb'}
+                                fill={color}
                                 cursor={spanCalc ? 'pointer' : 'default'}
                                 opacity={spanCalc ? 1 : 0.3}
                               />
@@ -1270,11 +1393,15 @@ export default function Statistics() {
                             if (spanFilterStatus === 'all') return true;
                             const spanIndex = spans[i];
                             const spanCalc = selectedBridgeData.spanCalculations.find((c) => c.spanIndex === spanIndex);
-                            const kValue = spanCalc ? spanCalc.kFinal : 0;
                             if (spanFilterStatus === 'calculated') return !!spanCalc;
                             if (spanFilterStatus === 'uncalculated') return !spanCalc;
-                            if (spanFilterStatus === 'danger') return kValue < 1.0;
-                            if (spanFilterStatus === 'low') return kValue < 1.5 && kValue >= 1.0;
+                            // 判定逻辑（四级分类）
+                            if (!spanCalc) return false;
+                            const level = getKValueLevelWithQ(spanCalc.kFinal, spanCalc.qResult);
+                            const levelKey = (level as { key: string }).key;
+                            if (spanFilterStatus === 'danger') return levelKey === 'danger';
+                            if (spanFilterStatus === 'partial') return levelKey === 'partial';
+                            if (spanFilterStatus === 'low') return levelKey === 'safe';
                             return true;
                           });
                         })()}
@@ -1285,12 +1412,12 @@ export default function Statistics() {
               </div>
             )}
 
-            {/* 第三行：K1-K4分项对比图 + 历史趋势 */}
+            {/* 第三行：K1-K5分项对比图 + 历史趋势 */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* K1-K4分项对比图 */}
+              {/* K1-K5分项对比图 */}
               {selectedBridgeData.spanCalculations.length > 0 && (
                 <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">K1~K4 分项对比</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">K1~K5 分项对比</h3>
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
@@ -1301,6 +1428,7 @@ export default function Statistics() {
                             { name: 'K2抗裂', value: Math.min(...calcs.map(c => c.k2)), color: '#10b981' },
                             { name: 'K3应力', value: Math.min(...calcs.map(c => c.k3)), color: '#f59e0b' },
                             { name: 'K4抗剪', value: Math.min(...calcs.map(c => c.k4)), color: '#ef4444' },
+                            { name: 'K5抗裂', value: Math.min(...calcs.map(c => c.k5)), color: '#8b5cf6' },
                           ];
                         })()}
                         layout="vertical"
@@ -1353,6 +1481,7 @@ export default function Statistics() {
                               { name: 'K2抗裂', value: Math.min(...calcs.map(c => c.k2)), color: '#10b981' },
                               { name: 'K3应力', value: Math.min(...calcs.map(c => c.k3)), color: '#f59e0b' },
                               { name: 'K4抗剪', value: Math.min(...calcs.map(c => c.k4)), color: '#ef4444' },
+                              { name: 'K5抗裂', value: Math.min(...calcs.map(c => c.k5)), color: '#8b5cf6' },
                             ].map((entry, index) => (
                               <Cell key={`cell-${index}`} fill={entry.color} />
                             ));
@@ -1442,7 +1571,7 @@ export default function Statistics() {
                             boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
                             padding: '8px 12px',
                           }}
-                          formatter={(value: number) => [`${value.toFixed(2)}`, '桥梁K值']}
+                          formatter={(value) => [`${Number(value).toFixed(2)}`, '桥梁K值']}
                           labelFormatter={(label) => label}
                           labelStyle={{ color: '#374151', fontWeight: 500, fontSize: '13px' }}
                           itemStyle={{ fontSize: '12px', color: '#3b82f6' }}
@@ -1454,8 +1583,9 @@ export default function Statistics() {
                           stroke="#3b82f6"
                           strokeWidth={2}
                           dot={(props) => {
-                            const { cx, cy, payload } = props as { cx: number; cy: number; payload: { level: typeof K_VALUE_LEVELS[0] } };
-                            const level = getKValueLevel(payload.bridgeK);
+                            const { cx, cy, payload } = props as { cx: number; cy: number; payload: { bridgeK: number; shortBoardQResult?: SpanCalculationData['qResult'] } };
+                            // 判定逻辑（四级分类）
+                            const level = getKValueLevelWithQ(payload.bridgeK, payload.shortBoardQResult);
                             return (
                               <circle
                                 cx={cx}
@@ -1533,7 +1663,7 @@ export default function Statistics() {
                             )}
                           </div>
                         </th>
-                        <th 
+                        <th
                           className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                           onClick={() => setSpanTableSort({ key: 'k4', order: spanTableSort.key === 'k4' && spanTableSort.order === 'asc' ? 'desc' : 'asc' })}
                         >
@@ -1544,7 +1674,18 @@ export default function Statistics() {
                             )}
                           </div>
                         </th>
-                        <th 
+                        <th
+                          className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                          onClick={() => setSpanTableSort({ key: 'k5', order: spanTableSort.key === 'k5' && spanTableSort.order === 'asc' ? 'desc' : 'asc' })}
+                        >
+                          <div className="flex items-center gap-1">
+                            K5抗裂
+                            {spanTableSort.key === 'k5' && (
+                              spanTableSort.order === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
+                            )}
+                          </div>
+                        </th>
+                        <th
                           className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                           onClick={() => setSpanTableSort({ key: 'kFinal', order: spanTableSort.key === 'kFinal' && spanTableSort.order === 'asc' ? 'desc' : 'asc' })}
                         >
@@ -1589,13 +1730,14 @@ export default function Statistics() {
                           return (a[spanTableSort.key] - b[spanTableSort.key]) * order;
                         });
                         return sortedData.map((calc) => {
-                          const { k1, k2, k3, k4, kFinal } = calc;
-                          const minK = Math.min(k1, k2, k3, k4);
+                          const { k1, k2, k3, k4, k5, kFinal } = calc;
+                          const minK = Math.min(k1, k2, k3, k4, k5);
                           let control = '';
                           if (minK === k1) control = 'K1';
                           else if (minK === k2) control = 'K2';
                           else if (minK === k3) control = 'K3';
                           else if (minK === k4) control = 'K4';
+                          else if (minK === k5) control = 'K5';
                           const isShortBoard = selectedBridgeData.shortBoardSpans.includes(calc.spanIndex);
 
                           return (
@@ -1630,8 +1772,19 @@ export default function Statistics() {
                               <td className="px-4 py-3 whitespace-nowrap text-sm">
                                 <span className={k4 === minK ? 'font-bold text-orange-600' : 'text-gray-700'}>{k4.toFixed(2)}</span>
                               </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                <span className={k5 === minK ? 'font-bold text-orange-600' : 'text-gray-700'}>{k5.toFixed(2)}</span>
+                              </td>
                               <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
-                                <span style={{ color: getKValueLevel(kFinal).color }}>{kFinal.toFixed(2)}</span>
+                                {(() => {
+                                  // 判定逻辑（考虑Q值）
+                                  let isSafe = kFinal >= 1.0;
+                                  if (!isSafe && calc.qResult) {
+                                    isSafe = calc.qResult.c80.meetsRequirement || calc.qResult.km98.meetsRequirement;
+                                  }
+                                  const color = isSafe ? K_VALUE_LEVELS[0].color : K_VALUE_LEVELS[1].color;
+                                  return <span style={{ color }}>{kFinal.toFixed(2)}</span>;
+                                })()}
                               </td>
                               <td className="px-4 py-3 whitespace-nowrap text-sm">
                                 <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">
@@ -1651,7 +1804,7 @@ export default function Statistics() {
             {/* 孔跨详情抽屉 */}
             {detailDrawerOpen && selectedSpanForDetail && (
               <>
-                <div 
+                <div
                   className="fixed inset-0 bg-black/30 z-40"
                   onClick={() => setDetailDrawerOpen(false)}
                 />
@@ -1659,9 +1812,14 @@ export default function Statistics() {
                   {(() => {
                     const spanCalc = selectedBridgeData.spanCalculations.find(c => c.spanIndex === selectedSpanForDetail);
                     if (!spanCalc) return null;
-                    const { k1, k2, k3, k4, kFinal } = spanCalc;
-                    const minK = Math.min(k1, k2, k3, k4);
-                    const level = getKValueLevel(kFinal);
+                    const { k1, k2, k3, k4, k5, kFinal } = spanCalc;
+                    const minK = Math.min(k1, k2, k3, k4, k5);
+                    // 判定逻辑（考虑Q值）
+                    let isSafe = kFinal >= 1.0;
+                    if (!isSafe && spanCalc.qResult) {
+                      isSafe = spanCalc.qResult.c80.meetsRequirement || spanCalc.qResult.km98.meetsRequirement;
+                    }
+                    const level = isSafe ? K_VALUE_LEVELS[0] : K_VALUE_LEVELS[1];
                     
                     return (
                       <div className="p-6">
@@ -1682,7 +1840,7 @@ export default function Statistics() {
                         {/* K值大卡片 */}
                         <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl p-6 mb-6 text-center">
                           <p className="text-sm text-gray-500 mb-2">最终K值</p>
-                          <p className="text-4xl font-bold mb-2" style={{ color: level.color }}>{kFinal.toFixed(4)}</p>
+                          <p className="text-4xl font-bold mb-2" style={{ color: level.color }}>{kFinal.toFixed(2)}</p>
                           <span 
                             className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium"
                             style={{ backgroundColor: level.bgColor, color: level.color }}
@@ -1692,7 +1850,7 @@ export default function Statistics() {
                           </span>
                         </div>
 
-                        {/* K1-K4 分项 */}
+                        {/* K1-K5 分项 */}
                         <div className="space-y-3 mb-6">
                           <h3 className="text-sm font-medium text-gray-700 mb-3">分项指标</h3>
                           {[
@@ -1700,6 +1858,7 @@ export default function Statistics() {
                             { key: 'K2', label: '正截面抗裂性', value: k2, color: '#10b981' },
                             { key: 'K3', label: '正截面应力', value: k3, color: '#f59e0b' },
                             { key: 'K4', label: '斜截面抗剪', value: k4, color: '#ef4444' },
+                            { key: 'K5', label: '斜截面抗裂性', value: k5, color: '#8b5cf6' },
                           ].map((item) => {
                             const isControl = item.value === minK;
                             return (
@@ -1734,6 +1893,13 @@ export default function Statistics() {
                             );
                           })}
                         </div>
+
+                        {/* Q值显示（当K < 1时） */}
+                        {spanCalc.qResult && kFinal < 1.0 && (
+                          <div className="mt-4 flex items-center">
+                            <QValueTooltip qResult={spanCalc.qResult} />
+                          </div>
+                        )}
 
                         {/* 计算时间 */}
                         <div className="flex items-center gap-2 text-sm text-gray-500 pt-4 border-t border-gray-100">
@@ -1836,7 +2002,7 @@ export default function Statistics() {
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{row.k2.toFixed(2)}</td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{row.k3.toFixed(2)}</td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{row.k4.toFixed(2)}</td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">{row.kFinal.toFixed(4)}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm font-medium" style={{ color: row.levelColor }}>{row.kFinal.toFixed(2)}</td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm">
                             <span
                               className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
