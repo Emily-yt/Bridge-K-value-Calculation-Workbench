@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { X, Calculator, TrendingDown, FileText, Info, History } from 'lucide-react';
 import type { KValueCalculation, Bridge } from '../lib/types';
-import { QValueTooltip } from './QValueTooltip';
+import { getAssessmentText, getControlItem, getKValueLevel } from '../lib/kValueAssessment';
 
 interface CalculationResultModalProps {
   calculation: KValueCalculation | null;
@@ -17,28 +17,16 @@ interface CalculationResultModalProps {
 // 1. K >= 1：满足"中-活载"要求
 // 2. K < 1：需计算Q值，若 Q < K 则满足要求
 const getKValueStatus = (k: number, qResult?: { c80: { meetsRequirement: boolean }; km98: { meetsRequirement: boolean } } | null) => {
-  if (k >= 1.0) {
-    return { label: '满足"中-活载"要求', color: 'text-emerald-600', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200', icon: '✓' };
-  }
-  // K < 1 时，检查Q值
-  if (qResult) {
-    const c80Meets = qResult.c80.meetsRequirement;
-    const km98Meets = qResult.km98.meetsRequirement;
-    if (c80Meets && km98Meets) {
-      return { label: '满足要求', color: 'text-emerald-600', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200', icon: '✓' };
-    } else if (c80Meets || km98Meets) {
-      return { label: '部分满足', color: 'text-amber-600', bgColor: 'bg-amber-50', borderColor: 'border-amber-200', icon: '⚠️' };
-    }
-  }
-  return { label: '不满足运营要求，需立即处理', color: 'text-red-600', bgColor: 'bg-red-50', borderColor: 'border-red-200', icon: '❌' };
+  const level = getKValueLevel(k, qResult);
+  if (level === 'safe') return { label: getAssessmentText(k, qResult), color: 'text-emerald-600', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200', icon: '✓' };
+  if (level === 'partial') return { label: getAssessmentText(k, qResult), color: 'text-amber-600', bgColor: 'bg-amber-50', borderColor: 'border-amber-200', icon: '!' };
+  return { label: getAssessmentText(k, qResult), color: 'text-red-600', bgColor: 'bg-red-50', borderColor: 'border-red-200', icon: '×' };
 };
 
 // 获取K分项状态
 const getKItemStatus = (k: number) => {
-  if (k >= 2.0) return { color: 'text-gray-700', barColor: 'bg-gray-500', width: '100%' };
-  if (k >= 1.5) return { color: 'text-gray-700', barColor: 'bg-gray-500', width: `${(k / 2.0) * 100}%` };
-  if (k >= 1.0) return { color: 'text-amber-600', barColor: 'bg-amber-500', width: `${(k / 2.0) * 100}%` };
-  return { color: 'text-red-600', barColor: 'bg-red-500', width: `${(k / 2.0) * 100}%` };
+  if (k >= 1.0) return { color: 'text-gray-700', barColor: 'bg-gray-500', width: '100%' };
+  return { color: 'text-red-600', barColor: 'bg-red-500', width: `${Math.max(k, 0) * 100}%` };
 };
 
 // K值项目配置
@@ -95,14 +83,7 @@ export default function CalculationResultModal({
   const k5 = output.k5 ?? 0; // 旧数据可能没有k5
 
   // 找出最小K值对应的项
-  const kValues = [
-    { key: 'k1', value: k1, label: 'K1' },
-    { key: 'k2', value: k2, label: 'K2' },
-    { key: 'k3', value: k3, label: 'K3' },
-    { key: 'k4', value: k4, label: 'K4' },
-    { key: 'k5', value: k5, label: 'K5' },
-  ];
-  const minKItem = kValues.reduce((min, item) => item.value < min.value ? item : min);
+  const minKItem = getControlItem({ k1, k2, k3, k4, k5 });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -117,7 +98,7 @@ export default function CalculationResultModal({
             <div>
               <h2 className="text-lg font-semibold text-gray-800">计算结果详情</h2>
               <p className="text-xs text-gray-500">
-                {bridge.bridgeName} · 第{spanIndex}孔 · {createTime.replace('T', ' ')}
+                {bridge.bridgeName} · 第{spanIndex}孔 · {new Date(createTime).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
               </p>
             </div>
           </div>
@@ -159,11 +140,11 @@ export default function CalculationResultModal({
               </div>
             </div>
 
-            {/* 承载系数卡片 */}
+            {/* 检定承载系数卡片 */}
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
               <div className="px-4 py-3 border-b border-gray-200 bg-gray-50/50 flex items-center gap-2">
                 <TrendingDown className="w-4 h-4 text-blue-600" />
-                <h3 className="font-semibold text-gray-800 text-sm">承载系数</h3>
+                <h3 className="font-semibold text-gray-800 text-sm">检定承载系数</h3>
               </div>
               <div className="p-4">
                 {/* 5个K值 */}
@@ -187,15 +168,42 @@ export default function CalculationResultModal({
                   <p className="text-xs text-gray-500 mb-1">整体检定承载系数（取{minKItem.label}最小值）</p>
                   <span className="text-xl font-bold text-gray-800">K = {kFinal.toFixed(2)}</span>
                 </div>
-
-                {/* Q值显示（当K < 1时） */}
-                {output.qResult && (
-                  <div className="mt-3 flex items-center justify-center">
-                    <QValueTooltip qResult={output.qResult} />
-                  </div>
-                )}
               </div>
             </div>
+
+            {/* Q值补充检算（当K < 1时） */}
+            {output.qResult && (
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className="px-4 py-3 border-b border-gray-200 bg-gray-50/50 flex items-center gap-2">
+                  <div className="w-4 h-4 rounded-full bg-amber-100 flex items-center justify-center">
+                    <span className="text-[10px] font-bold text-amber-600">Q</span>
+                  </div>
+                  <h3 className="font-semibold text-gray-800 text-sm">运行列车补充检算</h3>
+                </div>
+                <div className="p-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="text-center p-3 rounded-lg border border-gray-200 bg-gray-50/50">
+                      <p className="text-xs text-gray-500 mb-1">C80 列车</p>
+                      <div className="flex items-center justify-center gap-2">
+                        <span className="text-sm font-semibold text-gray-700">Q = {output.qResult.c80.q.toFixed(3)}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${output.qResult.c80.meetsRequirement ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                          {output.qResult.c80.meetsRequirement ? 'Q < K 满足' : 'Q ≥ K 不满足'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-center p-3 rounded-lg border border-gray-200 bg-gray-50/50">
+                      <p className="text-xs text-gray-500 mb-1">KM98 列车</p>
+                      <div className="flex items-center justify-center gap-2">
+                        <span className="text-sm font-semibold text-gray-700">Q = {output.qResult.km98.q.toFixed(3)}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${output.qResult.km98.meetsRequirement ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                          {output.qResult.km98.meetsRequirement ? 'Q < K 满足' : 'Q ≥ K 不满足'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* 历史对比 */}
             {previousCalculation && (

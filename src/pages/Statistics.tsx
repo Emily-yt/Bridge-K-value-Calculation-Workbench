@@ -37,6 +37,7 @@ import {
 import { getBridges, getCalculations } from '../lib/db';
 import type { Bridge, KValueCalculation } from '../lib/types';
 import { QValueTooltip } from '../components/QValueTooltip';
+import { getBridgeCoverage, getControlItem, getKValueLevel as assessKValueLevel, isSpanSupported } from '../lib/kValueAssessment';
 
 // ============ 常量定义 ============
 // 判定逻辑（四级分类）：
@@ -64,25 +65,8 @@ const getKValueLevel = (kValue: number) => {
 // 3. K < 1.0 且 Q值有且仅有1个不满足：部分满足（橙黄色）
 // 4. K < 1.0 且 Q值均不满足：不满足要求（红色）
 const getKValueLevelWithQ = (kValue: number, qResult?: { c80: { meetsRequirement: boolean }; km98: { meetsRequirement: boolean } } | null) => {
-  // K >= 1.0 直接满足
-  if (kValue >= 1.0) return K_VALUE_LEVELS[0]; // safe
-  
-  // K < 1.0 时需要检查Q值
-  if (!qResult) return K_VALUE_LEVELS[2]; // danger (无Q值数据，默认不满足)
-  
-  const c80Ok = qResult.c80.meetsRequirement;
-  const km98Ok = qResult.km98.meetsRequirement;
-  
-  if (c80Ok && km98Ok) {
-    // Q值均满足
-    return K_VALUE_LEVELS[0]; // safe
-  } else if (c80Ok || km98Ok) {
-    // 有且仅有1个不满足
-    return K_VALUE_LEVELS[1]; // partial
-  } else {
-    // Q值均不满足
-    return K_VALUE_LEVELS[2]; // danger
-  }
+  const level = assessKValueLevel(kValue, qResult);
+  return level === 'safe' ? K_VALUE_LEVELS[0] : level === 'partial' ? K_VALUE_LEVELS[1] : K_VALUE_LEVELS[2];
 };
 
 // 获取 K 值等级标签（带颜色点）
@@ -120,6 +104,10 @@ interface BridgeKValueData {
   operationStatus: string;
   bridgeKValue: number | null;
   calculatedSpans: number;
+  supportedSpanCount: number;
+  unsupportedSpanCount: number;
+  coverageStatus: 'unevaluated' | 'partial' | 'complete';
+  scopeText: string;
   shortBoardSpans: number[];
   controlComponent: string | null;
   lastCalcTime: string | null;
@@ -251,7 +239,8 @@ export default function Statistics() {
   // 桥梁K值数据计算
   const bridgeKValueData = useMemo((): BridgeKValueData[] => {
     return bridges.map((bridge) => {
-      const bridgeCalcs = filteredCalculations.filter((c) => c.bridgeId === bridge.id);
+      const supportedSpanIndices = new Set(bridge.spans.filter(isSpanSupported).map((span) => span.index));
+      const bridgeCalcs = filteredCalculations.filter((c) => c.bridgeId === bridge.id && supportedSpanIndices.has(c.spanIndex));
       const spanCalculations: SpanCalculationData[] = bridgeCalcs.map((c) => ({
         spanIndex: c.spanIndex,
         beamType: c.beamType,
@@ -275,6 +264,7 @@ export default function Statistics() {
       });
 
       const latestCalcs = Array.from(spanLatestCalcs.values());
+      const coverage = getBridgeCoverage(bridge, filteredCalculations);
       const kFinals = latestCalcs.map((c) => c.kFinal);
       const bridgeKValue = kFinals.length > 0 ? Math.min(...kFinals) : null;
 
@@ -288,13 +278,8 @@ export default function Statistics() {
       if (shortBoardSpans.length > 0) {
         const shortBoardCalc = latestCalcs.find((c) => c.spanIndex === shortBoardSpans[0]);
         if (shortBoardCalc) {
-          const { k1, k2, k3, k4, k5 } = shortBoardCalc;
-          const minK = Math.min(k1, k2, k3, k4, k5);
-          if (minK === k1) controlComponent = 'K1 正截面抗弯强度';
-          else if (minK === k2) controlComponent = 'K2 正截面抗裂性';
-          else if (minK === k3) controlComponent = 'K3 正截面应力';
-          else if (minK === k4) controlComponent = 'K4 斜截面抗剪';
-          else if (minK === k5) controlComponent = 'K5 斜截面抗裂性';
+          const control = getControlItem(shortBoardCalc);
+          controlComponent = `${control.label} ${control.description}`;
         }
       }
 
@@ -314,7 +299,11 @@ export default function Statistics() {
         buildYear: bridge.buildYear,
         operationStatus: bridge.operationStatus,
         bridgeKValue,
-        calculatedSpans: latestCalcs.length,
+        calculatedSpans: coverage.calculatedSupportedSpanCount,
+        supportedSpanCount: coverage.supportedSpanCount,
+        unsupportedSpanCount: coverage.unsupportedSpanCount,
+        coverageStatus: coverage.status,
+        scopeText: coverage.scopeText,
         shortBoardSpans,
         controlComponent,
         lastCalcTime,
@@ -334,20 +323,11 @@ export default function Statistics() {
     // 3. K < 1.0 且 Q值有且仅有1个不满足：部分满足（橙黄色）
     // 4. K < 1.0 且 Q值均不满足：不满足要求（红色）
     const getBridgeLevel = (bridge: BridgeKValueData): 'safe' | 'partial' | 'danger' => {
-      if (!bridge.bridgeKValue) return 'danger';
-      if (bridge.bridgeKValue >= 1.0) return 'safe';
-      // K < 1 时，检查短板孔跨的Q值结果
+      if (bridge.bridgeKValue === null) return 'danger';
       const minKSpan = bridge.spanCalculations.reduce((min, span) => 
         span.kFinal < min.kFinal ? span : min
       );
-      if (!minKSpan.qResult) return 'danger';
-      
-      const c80Ok = minKSpan.qResult.c80.meetsRequirement;
-      const km98Ok = minKSpan.qResult.km98.meetsRequirement;
-      
-      if (c80Ok && km98Ok) return 'safe';
-      if (c80Ok || km98Ok) return 'partial';
-      return 'danger';
+      return assessKValueLevel(minKSpan.kFinal, minKSpan.qResult);
     };
     
     const safeBridges = evaluatedBridges.filter((b) => getBridgeLevel(b) === 'safe');
@@ -359,7 +339,7 @@ export default function Statistics() {
     const bridgeCoverage = totalBridges > 0 ? Math.round((calculatedBridgeCount / totalBridges) * 100) : 0;
 
     // 孔跨覆盖
-    const totalSpans = bridges.reduce((sum, b) => sum + b.spanCount, 0);
+    const totalSpans = bridgeKValueData.reduce((sum, b) => sum + b.supportedSpanCount, 0);
     const calculatedSpanCount = evaluatedBridges.reduce((sum, b) => sum + b.calculatedSpans, 0);
     const spanCoverage = totalSpans > 0 ? Math.round((calculatedSpanCount / totalSpans) * 100) : 0;
 
@@ -401,7 +381,9 @@ export default function Statistics() {
         bridgeKValue: b.bridgeKValue!,
         avgKValue: b.avgKValue,
         calculatedSpans: b.calculatedSpans,
-        spanCount: b.spanCount,
+        spanCount: b.supportedSpanCount,
+        unsupportedSpanCount: b.unsupportedSpanCount,
+        scopeText: b.scopeText,
       }));
 
     return {
@@ -423,6 +405,17 @@ export default function Statistics() {
     if (!selectedBridgeId) return null;
     return bridgeKValueData.find((b) => b.bridgeId === selectedBridgeId) || null;
   }, [selectedBridgeId, bridgeKValueData]);
+
+  // 趋势用于观察过程数据，阶段性检算桥梁也应可选；正式排名仍只纳入支持范围已完成的桥梁。
+  const trendBridgeOptions = useMemo(() => {
+    return bridgeKValueData
+      .filter((bridge) => bridge.bridgeKValue !== null)
+      .map((bridge) => ({
+        bridgeId: bridge.bridgeId,
+        bridgeName: bridge.bridgeName,
+        bridgeKValue: bridge.bridgeKValue!,
+      }));
+  }, [bridgeKValueData]);
 
   // 桥梁历史趋势数据
   const bridgeTrendData = useMemo(() => {
@@ -487,25 +480,7 @@ export default function Statistics() {
   const kLevelDistributionData = useMemo(() => {
     // 获取K值等级（考虑Q值）- 四级分类
     const getLevel = (kFinal: number, qResult?: SpanCalculationData['qResult']) => {
-      // K >= 1.0 直接满足
-      if (kFinal >= 1.0) return 'safe';
-      
-      // K < 1.0 时需要检查Q值
-      if (!qResult) return 'danger';
-      
-      const c80Ok = qResult.c80.meetsRequirement;
-      const km98Ok = qResult.km98.meetsRequirement;
-      
-      if (c80Ok && km98Ok) {
-        // Q值均满足
-        return 'safe';
-      } else if (c80Ok || km98Ok) {
-        // 有且仅有1个不满足
-        return 'partial';
-      } else {
-        // Q值均不满足
-        return 'danger';
-      }
+      return assessKValueLevel(kFinal, qResult);
     };
 
     if (selectedBridgeForDistribution === 'all') {
@@ -585,7 +560,6 @@ export default function Statistics() {
         level: level.label,
         levelColor: level.color,
         createTime: calc.createTime,
-        creator: calc.creator,
       };
     }).sort((a, b) => new Date(b.createTime).getTime() - new Date(a.createTime).getTime());
   }, [filteredCalculations, bridges]);
@@ -610,7 +584,7 @@ export default function Statistics() {
       a.click();
       URL.revokeObjectURL(url);
     } else {
-      const headers = ['桥梁名称', '所属线路', '孔跨序号', '梁型', 'K1抗弯', 'K2抗裂', 'K3应力', 'K4抗剪', 'K5抗裂', 'K最终', 'K值等级', '计算时间', '计算人'];
+      const headers = ['桥梁名称', '所属线路', '孔跨序号', '梁型', 'K1抗弯', 'K2抗裂', 'K3应力', 'K4抗剪', 'K5抗裂', 'K最终', 'K值等级', '计算时间'];
       const rows = detailData.map((d) => [
         d.bridgeName,
         d.lineName,
@@ -624,7 +598,6 @@ export default function Statistics() {
         d.kFinal,
         d.level,
         d.createTime,
-        d.creator,
       ]);
       const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
       const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
@@ -699,7 +672,7 @@ export default function Statistics() {
               {/* K值等级分布饼图 */}
               <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
                 <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-semibold text-gray-900">K值等级分布</h3>
+                  <h3 className="font-semibold text-gray-800">K值等级分布</h3>
                   <div className="flex items-center gap-2">
                     {/* 桥梁筛选 */}
                     <div className="relative">
@@ -812,11 +785,11 @@ export default function Statistics() {
               {/* 桥梁K值趋势折线图 */}
               <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm flex flex-col">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900">桥梁K值趋势</h3>
+                  <h3 className="font-semibold text-gray-800">桥梁K值趋势</h3>
                   <div className="flex items-center gap-3">
                     {/* 桥梁选择器 - 下拉框 */}
                     <BridgeSelectorDropdown
-                      bridges={overviewStats.bridgeRanking}
+                      bridges={trendBridgeOptions}
                       selectedIds={selectedBridgeIdsForChart}
                       onChange={setSelectedBridgeIdsForChart}
                     />
@@ -839,7 +812,7 @@ export default function Statistics() {
                 <div className="flex-1 min-h-0">
                 {selectedBridgeIdsForChart.size > 0 ? (() => {
                   const selectedBridgeId = Array.from(selectedBridgeIdsForChart)[0];
-                  const bridge = overviewStats.bridgeRanking.find(b => b.bridgeId === selectedBridgeId);
+                  const bridge = trendBridgeOptions.find(b => b.bridgeId === selectedBridgeId);
                   if (!bridge) return <EmptyState icon={LineChart} title="请选择桥梁" />;
 
                   // 获取该桥梁的历史K值数据（按年月）
@@ -956,7 +929,7 @@ export default function Statistics() {
             {/* 桥梁K值排名表 */}
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">桥梁K值排名</h3>
+                <h3 className="font-semibold text-gray-800">桥梁K值排名</h3>
                 <div className="flex items-center gap-2">
                   {/* 排序方式选择 */}
                   <div className="relative">
@@ -998,6 +971,7 @@ export default function Statistics() {
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">平均K值</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">已算/总孔</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">是否满足运营条件</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">不满足标准</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -1007,24 +981,22 @@ export default function Statistics() {
                       // 2. K < 1.0 且 Q值均满足：满足要求（绿色）
                       // 3. K < 1.0 且 Q值有且仅有1个不满足：部分满足（橙黄色）
                       // 4. K < 1.0 且 Q值均不满足：不满足要求（红色）
-                      const getOperationalLevel = (): { level: 'safe' | 'partial' | 'danger'; label: string } => {
-                        if (row.bridgeKValue >= 1.0) {
-                          return { level: 'safe', label: '满足要求' };
-                        }
-                        // 查找该桥梁的短板孔跨Q值结果
+                      const getOperationalLevel = (): { level: 'safe' | 'partial' | 'danger'; label: string; unmetStandards: string[] } => {
                         const bridgeData = bridgeKValueData.find(b => b.bridgeId === row.bridgeId);
                         if (bridgeData && bridgeData.spanCalculations.length > 0) {
                           const minKSpan = bridgeData.spanCalculations.reduce((min, span) =>
                             span.kFinal < min.kFinal ? span : min
                           );
+                          const level = getKValueLevelWithQ(minKSpan.kFinal, minKSpan.qResult);
+                          // 判断不满足的标准
+                          const unmetStandards: string[] = [];
                           if (minKSpan.qResult) {
-                            const c80Ok = minKSpan.qResult.c80.meetsRequirement;
-                            const km98Ok = minKSpan.qResult.km98.meetsRequirement;
-                            if (c80Ok && km98Ok) return { level: 'safe', label: '满足要求' };
-                            if (c80Ok || km98Ok) return { level: 'partial', label: '部分满足' };
+                            if (!minKSpan.qResult.c80.meetsRequirement) unmetStandards.push('C80');
+                            if (!minKSpan.qResult.km98.meetsRequirement) unmetStandards.push('KM98');
                           }
+                          return { level: level.key, label: level.label, unmetStandards };
                         }
-                        return { level: 'danger', label: '不满足要求' };
+                        return { level: 'danger', label: '不满足要求', unmetStandards: [] };
                       };
                       const operationalStatus = getOperationalLevel();
                       const levelConfig = K_VALUE_LEVELS.find(l => l.key === operationalStatus.level) || K_VALUE_LEVELS[2];
@@ -1044,7 +1016,8 @@ export default function Statistics() {
                             <KValueLevelBadge kValue={row.avgKValue ?? row.bridgeKValue} showLabel={false} />
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {row.calculatedSpans}/{row.spanCount}
+                            <div>{row.calculatedSpans}/{row.spanCount}</div>
+                            {row.unsupportedSpanCount > 0 && <div className="text-xs font-normal text-gray-400">另 {row.unsupportedSpanCount} 孔未纳入</div>}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm">
                             <span
@@ -1057,13 +1030,18 @@ export default function Statistics() {
                               {operationalStatus.label}
                             </span>
                           </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                            {operationalStatus.unmetStandards.length > 0
+                              ? operationalStatus.unmetStandards.join('、')
+                              : '-'}
+                          </td>
                         </tr>
                       );
                     })}
                     {overviewStats.bridgeRanking.length === 0 && (
                       <tr>
-                        <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
-                          暂无已评估桥梁数据
+                        <td colSpan={9} className="px-6 py-8 text-center text-gray-500">
+                          暂无已评估的整桥数据
                         </td>
                       </tr>
                     )}
@@ -1081,7 +1059,7 @@ export default function Statistics() {
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
               {/* 头部：卡片标题 */}
               <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
-                <h2 className="text-lg font-semibold text-gray-800">桥梁详细信息</h2>
+                <h2 className="font-semibold text-gray-800">桥梁详细信息</h2>
               </div>
 
               {/* 主体内容：桥梁信息 + K值仪表盘 */}
@@ -1137,32 +1115,19 @@ export default function Statistics() {
                         <div className="text-center">
                           <p className="text-sm text-gray-500 mb-1">桥梁K值</p>
                           <p className="text-3xl font-bold text-gray-900">{selectedBridgeData.bridgeKValue.toFixed(2)}</p>
+                          {selectedBridgeData.coverageStatus !== 'complete' && (
+                            <span className="inline-flex mt-2 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">阶段性结果</span>
+                          )}
                           {(() => {
                             // 判定逻辑（四级分类）
                             // 1. K >= 1.0：满足要求（绿色）
                             // 2. K < 1.0 且 Q值均满足：满足要求（绿色）
                             // 3. K < 1.0 且 Q值有且仅有1个不满足：部分满足（橙黄色）
                             // 4. K < 1.0 且 Q值均不满足：不满足要求（红色）
-                            const kFinal = selectedBridgeData.bridgeKValue!;
-                            let level: typeof K_VALUE_LEVELS[number] = K_VALUE_LEVELS[0]; // safe
-                            if (kFinal < 1.0 && selectedBridgeData.spanCalculations.length > 0) {
-                              const minKSpan = selectedBridgeData.spanCalculations.reduce((min, span) =>
-                                span.kFinal < min.kFinal ? span : min
-                              );
-                              if (minKSpan.qResult) {
-                                const c80Ok = minKSpan.qResult.c80.meetsRequirement;
-                                const km98Ok = minKSpan.qResult.km98.meetsRequirement;
-                                if (c80Ok && km98Ok) {
-                                  level = K_VALUE_LEVELS[0]; // safe
-                                } else if (c80Ok || km98Ok) {
-                                  level = K_VALUE_LEVELS[1]; // partial
-                                } else {
-                                  level = K_VALUE_LEVELS[2]; // danger
-                                }
-                              } else {
-                                level = K_VALUE_LEVELS[2]; // danger
-                              }
-                            }
+                            const minKSpan = selectedBridgeData.spanCalculations.reduce((min, span) =>
+                              span.kFinal < min.kFinal ? span : min
+                            );
+                            const level = getKValueLevelWithQ(minKSpan.kFinal, minKSpan.qResult);
                             return (
                               <span
                                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium mt-2"
@@ -1229,15 +1194,16 @@ export default function Statistics() {
                           <div className="flex items-center justify-between mb-2">
                             <span className="text-xs text-gray-500">计算进度</span>
                             <span className="text-xs font-medium text-gray-700">
-                              {selectedBridgeData.calculatedSpans}/{selectedBridgeData.spanCount} 孔
+                              {selectedBridgeData.calculatedSpans}/{selectedBridgeData.supportedSpanCount} 孔
                             </span>
                           </div>
                           <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                             <div
                               className="h-full bg-blue-500 rounded-full transition-all"
-                              style={{ width: `${(selectedBridgeData.calculatedSpans / selectedBridgeData.spanCount) * 100}%` }}
+                              style={{ width: `${selectedBridgeData.supportedSpanCount > 0 ? (selectedBridgeData.calculatedSpans / selectedBridgeData.supportedSpanCount) * 100 : 0}%` }}
                             />
                           </div>
+                          <p className="text-xs text-gray-500 mt-2">{selectedBridgeData.scopeText}</p>
                         </div>
                       </div>
                     ) : (
@@ -1252,7 +1218,7 @@ export default function Statistics() {
             {selectedBridgeData.spanCalculations.length > 0 && (
               <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900">孔跨K值分布</h3>
+                  <h3 className="font-semibold text-gray-800">孔跨K值分布</h3>
                   <div className="flex items-center gap-4 text-xs text-gray-500">
                     <span className="flex items-center gap-1">
                       <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: K_VALUE_LEVELS[0].color }} />
@@ -1417,7 +1383,7 @@ export default function Statistics() {
               {/* K1-K5分项对比图 */}
               {selectedBridgeData.spanCalculations.length > 0 && (
                 <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">K1~K5 分项对比</h3>
+                  <h3 className="font-semibold text-gray-800 mb-4">K1~K5 分项对比</h3>
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
@@ -1497,7 +1463,7 @@ export default function Statistics() {
               {bridgeTrendData.length > 0 && (
                 <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-gray-900">历史趋势</h3>
+                    <h3 className="font-semibold text-gray-800">历史趋势</h3>
                     <div className="flex items-center gap-3">
                       {/* 孔跨号筛选 - 使用系统自带select */}
                       <div className="relative">
@@ -1612,7 +1578,7 @@ export default function Statistics() {
             {selectedBridgeData.spanCalculations.length > 0 && (
               <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="px-6 py-4 border-b border-gray-100">
-                  <h3 className="text-lg font-semibold text-gray-900">孔跨明细数据</h3>
+                  <h3 className="font-semibold text-gray-800">孔跨明细数据</h3>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full">
@@ -1777,13 +1743,8 @@ export default function Statistics() {
                               </td>
                               <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
                                 {(() => {
-                                  // 判定逻辑（考虑Q值）
-                                  let isSafe = kFinal >= 1.0;
-                                  if (!isSafe && calc.qResult) {
-                                    isSafe = calc.qResult.c80.meetsRequirement || calc.qResult.km98.meetsRequirement;
-                                  }
-                                  const color = isSafe ? K_VALUE_LEVELS[0].color : K_VALUE_LEVELS[1].color;
-                                  return <span style={{ color }}>{kFinal.toFixed(2)}</span>;
+                                  const level = getKValueLevelWithQ(kFinal, calc.qResult);
+                                  return <span style={{ color: level.color }}>{kFinal.toFixed(2)}</span>;
                                 })()}
                               </td>
                               <td className="px-4 py-3 whitespace-nowrap text-sm">
@@ -1814,12 +1775,7 @@ export default function Statistics() {
                     if (!spanCalc) return null;
                     const { k1, k2, k3, k4, k5, kFinal } = spanCalc;
                     const minK = Math.min(k1, k2, k3, k4, k5);
-                    // 判定逻辑（考虑Q值）
-                    let isSafe = kFinal >= 1.0;
-                    if (!isSafe && spanCalc.qResult) {
-                      isSafe = spanCalc.qResult.c80.meetsRequirement || spanCalc.qResult.km98.meetsRequirement;
-                    }
-                    const level = isSafe ? K_VALUE_LEVELS[0] : K_VALUE_LEVELS[1];
+                    const level = getKValueLevelWithQ(kFinal, spanCalc.qResult);
                     
                     return (
                       <div className="p-6">
@@ -1981,9 +1937,9 @@ export default function Statistics() {
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">K2</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">K3</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">K4</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">K5</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">K最终</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">等级</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">计算人</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -2002,6 +1958,7 @@ export default function Statistics() {
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{row.k2.toFixed(2)}</td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{row.k3.toFixed(2)}</td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{row.k4.toFixed(2)}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{row.k5.toFixed(2)}</td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm font-medium" style={{ color: row.levelColor }}>{row.kFinal.toFixed(2)}</td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm">
                             <span
@@ -2011,7 +1968,6 @@ export default function Statistics() {
                               {row.level}
                             </span>
                           </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{row.creator}</td>
                         </tr>
                       ))}
                   </tbody>

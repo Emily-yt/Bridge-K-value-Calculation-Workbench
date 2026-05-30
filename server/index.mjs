@@ -64,6 +64,32 @@ async function getFixedParams() {
   return fixedParamsCache;
 }
 
+function generateBridgeId(list) {
+  const maxId = list.reduce((max, bridge) => {
+    const match = /^BRG(\d+)$/.exec(bridge.id || '');
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0);
+  return `BRG${String(maxId + 1).padStart(3, '0')}`;
+}
+
+function getNominalSpanLength(beamLength) {
+  return Number.isInteger(beamLength) ? beamLength : Math.floor(beamLength);
+}
+
+function buildSpanType(spans, structureType) {
+  const groups = [];
+  for (const span of spans) {
+    const nominalLength = getNominalSpanLength(span.beamLength);
+    const last = groups.at(-1);
+    if (last && last.nominalLength === nominalLength) {
+      last.count += 1;
+    } else {
+      groups.push({ count: 1, nominalLength });
+    }
+  }
+  return `${groups.map((group) => `${group.count}-${group.nominalLength}m`).join('/')}-${structureType}`;
+}
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -74,6 +100,136 @@ app.get('/api/bridges', async (_req, res) => {
     ok(res, Array.isArray(bridges) ? bridges : bridges.list || []);
   } catch (e) {
     fail(res, 500, e.message || '读取桥梁数据失败');
+  }
+});
+
+app.post('/api/bridges', async (req, res) => {
+  try {
+    const {
+      bridgeName,
+      lineName,
+      bridgeNo,
+      centerMileage,
+      buildYear,
+      operationStatus,
+      structureType,
+      spans,
+    } = req.body || {};
+    const normalized = {
+      bridgeName: typeof bridgeName === 'string' ? bridgeName.trim() : '',
+      lineName: typeof lineName === 'string' ? lineName.trim() : '',
+      bridgeNo: typeof bridgeNo === 'string' ? bridgeNo.trim() : '',
+      centerMileage: typeof centerMileage === 'string' ? centerMileage.trim() : '',
+      structureType: typeof structureType === 'string' ? structureType.trim() : '',
+    };
+
+    if (Object.values(normalized).some((value) => !value)) {
+      return fail(res, 400, '请完整填写桥梁名称、线路、桥号、中心里程和结构形式');
+    }
+
+    const year = Number(buildYear);
+    const currentYear = new Date().getFullYear();
+    if (!Number.isInteger(year) || year < 1800 || year > currentYear) {
+      return fail(res, 400, `建成年份必须为 1800 至 ${currentYear} 之间的整数`);
+    }
+    if (!['运营中', '已停用'].includes(operationStatus)) {
+      return fail(res, 400, '运营状态必须为“运营中”或“已停用”');
+    }
+    if (!Array.isArray(spans) || spans.length === 0) {
+      return fail(res, 400, '请至少配置一个孔跨');
+    }
+
+    const normalizedSpans = [];
+    for (let i = 0; i < spans.length; i += 1) {
+      const span = spans[i] || {};
+      const index = Number(span.index);
+      const beamLength = Number(span.beamLength);
+      const beamHeight = Number(span.beamHeight);
+      const beamCenterDist = Number(span.beamCenterDist);
+      const beamType = typeof span.beamType === 'string' ? span.beamType.trim() : '';
+
+      if (index !== i + 1) {
+        return fail(res, 400, '孔跨序号必须从 1 开始连续递增');
+      }
+      if (!Number.isFinite(beamLength) || beamLength <= 0) {
+        return fail(res, 400, `第 ${index} 孔的梁长必须大于 0`);
+      }
+      if (!Number.isFinite(beamHeight) || beamHeight < 0) {
+        return fail(res, 400, `第 ${index} 孔的梁高不能小于 0`);
+      }
+      if (!Number.isFinite(beamCenterDist) || beamCenterDist <= 0) {
+        return fail(res, 400, `第 ${index} 孔的梁中心距必须大于 0`);
+      }
+      if (!beamType) {
+        return fail(res, 400, `请填写第 ${index} 孔的梁型图号`);
+      }
+
+      normalizedSpans.push({ index, beamLength, beamHeight, beamCenterDist, beamType });
+    }
+
+    const bridges = await readJsonFile('bridges.json');
+    const list = Array.isArray(bridges) ? bridges : bridges.list || [];
+    const duplicate = list.some(
+      (bridge) =>
+        bridge.lineName?.trim().toLowerCase() === normalized.lineName.toLowerCase() &&
+        bridge.bridgeNo?.trim().toLowerCase() === normalized.bridgeNo.toLowerCase()
+    );
+    if (duplicate) {
+      return fail(res, 400, `线路“${normalized.lineName}”中已存在桥号“${normalized.bridgeNo}”`);
+    }
+
+    const bridge = {
+      id: generateBridgeId(list),
+      bridgeName: normalized.bridgeName,
+      lineName: normalized.lineName,
+      bridgeNo: normalized.bridgeNo,
+      centerMileage: normalized.centerMileage,
+      spanType: buildSpanType(normalizedSpans, normalized.structureType),
+      spanCount: normalizedSpans.length,
+      spans: normalizedSpans,
+      buildYear: year,
+      operationStatus,
+    };
+
+    list.push(bridge);
+    if (Array.isArray(bridges)) {
+      await writeJsonFile('bridges.json', list);
+    } else {
+      bridges.list = list;
+      await writeJsonFile('bridges.json', bridges);
+    }
+    ok(res, bridge);
+  } catch (e) {
+    fail(res, 500, e.message || '新增桥梁失败');
+  }
+});
+
+app.delete('/api/bridges/:id', async (req, res) => {
+  try {
+    const bridges = await readJsonFile('bridges.json');
+    const list = Array.isArray(bridges) ? bridges : bridges.list || [];
+    const bridgeExists = list.some((bridge) => bridge.id === req.params.id);
+    if (!bridgeExists) return fail(res, 404, '桥梁不存在');
+
+    const store = await readJsonFile('k_calculations.json');
+    const calculations = store.calculations || [];
+    const remainingCalculations = calculations.filter((calculation) => calculation.bridgeId !== req.params.id);
+    const deletedCalculations = calculations.length - remainingCalculations.length;
+    const remainingBridges = list.filter((bridge) => bridge.id !== req.params.id);
+
+    store.calculations = remainingCalculations;
+    await writeJsonFile('k_calculations.json', store);
+
+    if (Array.isArray(bridges)) {
+      await writeJsonFile('bridges.json', remainingBridges);
+    } else {
+      bridges.list = remainingBridges;
+      await writeJsonFile('bridges.json', bridges);
+    }
+
+    ok(res, { deleted: true, deletedCalculations });
+  } catch (e) {
+    fail(res, 500, e.message || '删除桥梁失败');
   }
 });
 
@@ -207,10 +363,10 @@ app.delete('/api/calculations/:id', async (req, res) => {
   }
 });
 
-// 保存报告内容（HTML）
+// 保存报告人工填写内容。计算结果和系统结论始终由计算记录实时生成。
 app.put('/api/calculations/:id/report', async (req, res) => {
   try {
-    const { htmlContent, notes, reviewer } = req.body || {};
+    const { notes, reviewer } = req.body || {};
     const store = await readJsonFile('k_calculations.json');
     const c = (store.calculations || []).find((x) => x.id === req.params.id);
     if (!c) return fail(res, 404, '计算记录不存在');
@@ -219,7 +375,6 @@ app.put('/api/calculations/:id/report', async (req, res) => {
       ...(c.report || {}),
       generated: true,
       generateTime: getBeijingTime(),
-      htmlContent: htmlContent || c.report?.htmlContent,
       notes: notes !== undefined ? notes : c.report?.notes,
       reviewer: reviewer !== undefined ? reviewer : c.report?.reviewer,
     };

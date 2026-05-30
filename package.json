@@ -11,6 +11,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "start": "node server/index.mjs",
+    "test:assessment": "node --experimental-strip-types --test tests/kValueAssessment.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.app.json"
   },
   "dependencies": {

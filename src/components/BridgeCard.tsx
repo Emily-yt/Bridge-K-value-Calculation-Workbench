@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Check } from 'lucide-react';
 import type { Bridge, KValueCalculation } from '../lib/types';
+import { getAssessmentText } from '../lib/kValueAssessment';
 
 interface BridgeCardProps {
   bridge: Bridge;
@@ -78,11 +79,6 @@ export default function BridgeCard({ bridge, calculations, onSpanClick, isSelect
     };
   };
 
-  // 计算进度
-  const calculatedCount = bridge.spans.filter(s =>
-    calculations.some(c => c.spanIndex === s.index)
-  ).length;
-
   // 计算总跨径长度用于比例缩放
   const totalLength = useMemo(() => {
     return bridge.spans.reduce((sum, span) => sum + span.beamLength, 0);
@@ -96,13 +92,9 @@ export default function BridgeCard({ bridge, calculations, onSpanClick, isSelect
     if (!span) return null;
 
     let kValueText = '';
-    if (status.kValue) {
-      let statusLabel = '合格';
-      if (status.kValue >= 2.0) statusLabel = '优秀';
-      else if (status.kValue >= 1.5) statusLabel = '合格';
-      else if (status.kValue >= 1.0) statusLabel = '预警';
-      else statusLabel = '不合格';
-      kValueText = `K值：${status.kValue.toFixed(2)}（${statusLabel}）`;
+    if (status.kValue !== undefined) {
+      const calculation = calculations.find(c => c.spanIndex === spanIndex);
+      kValueText = `K值：${status.kValue.toFixed(2)}（${getAssessmentText(status.kValue, calculation?.output.qResult)}）`;
     }
 
     return (

@@ -51,6 +51,7 @@ function App() {
           <KValueCalculation
             dataRefresh={dataRefresh}
             onCalculate={handleCalculate}
+            onOpenReport={handleOpenReport}
           />
         );
       case 'statistics':

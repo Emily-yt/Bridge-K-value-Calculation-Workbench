@@ -1,28 +1,26 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Search, X, ChevronDown, Calculator, AlertTriangle } from 'lucide-react';
-import type { Bridge, KValueCalculation as KValueCalculationType, BeamSpan } from '../lib/types';
-import { getBridges, getCalculations } from '../lib/db';
+import { Search, X, ChevronDown, Calculator, AlertTriangle, CheckCircle, Plus } from 'lucide-react';
+import type { Bridge, KValueCalculation as KValueCalculationType } from '../lib/types';
+import { deleteBridge, getBridges, getCalculations } from '../lib/db';
 import BridgeCard from '../components/BridgeCard';
 import BridgeDetailModal from '../components/BridgeDetailModal';
 import CalculationResultModal from '../components/CalculationResultModal';
-
-// 验证桥孔是否支持计算
-function isSpanSupported(span: BeamSpan): boolean {
-  return span.beamType === '专桥2059' && span.beamLength === 32.6;
-}
+import CreateBridgeDrawer from '../components/CreateBridgeDrawer';
+import { getBridgeCoverage, isSpanSupported } from '../lib/kValueAssessment';
 
 // Toast 提示组件
-function Toast({ message, type, onClose }: { message: string; type: 'warning' | 'error' | 'info'; onClose: () => void }) {
+function Toast({ message, type, onClose }: { message: string; type: 'success' | 'warning' | 'error' | 'info'; onClose: () => void }) {
   useEffect(() => {
     const timer = setTimeout(onClose, 3000);
     return () => clearTimeout(timer);
   }, [onClose]);
 
-  const bgColor = type === 'warning' ? 'bg-amber-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500';
+  const bgColor = type === 'success' ? 'bg-green-500' : type === 'warning' ? 'bg-amber-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500';
+  const Icon = type === 'success' ? CheckCircle : AlertTriangle;
 
   return (
     <div className={`fixed top-4 left-1/2 transform -translate-x-1/2 z-[60] ${bgColor} text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 animate-in fade-in slide-in-from-top-2`}>
-      <AlertTriangle className="w-4 h-4" />
+      <Icon className="w-4 h-4" />
       <span className="text-sm font-medium">{message}</span>
       <button onClick={onClose} className="ml-2 hover:opacity-80">
         <X className="w-4 h-4" />
@@ -36,15 +34,17 @@ type FilterStatus = 'all' | 'calculated' | 'pending';
 interface KValueCalculationProps {
   dataRefresh: number;
   onCalculate: (bridge: Bridge, spanIndex?: number) => void;
+  onOpenReport?: (calculationId: string) => void;
 }
 
-export default function KValueCalculation({ dataRefresh, onCalculate }: KValueCalculationProps) {
+export default function KValueCalculation({ dataRefresh, onCalculate, onOpenReport }: KValueCalculationProps) {
   const [bridges, setBridges] = useState<Bridge[]>([]);
   const [calculations, setCalculations] = useState<KValueCalculationType[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [lineFilter, setLineFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('all');
   const [loading, setLoading] = useState(true);
+  const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
 
   // 选中的桥梁（单选）
   const [selectedBridgeId, setSelectedBridgeId] = useState<string | null>(null);
@@ -58,7 +58,7 @@ export default function KValueCalculation({ dataRefresh, onCalculate }: KValueCa
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
   // Toast 提示状态
-  const [toast, setToast] = useState<{ message: string; type: 'warning' | 'error' | 'info' } | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'warning' | 'error' | 'info' } | null>(null);
 
   useEffect(() => {
     loadData();
@@ -82,17 +82,14 @@ export default function KValueCalculation({ dataRefresh, onCalculate }: KValueCa
 
   // 获取桥梁的计算状态
   const getBridgeCalcStatus = useCallback((bridge: Bridge): 'calculated' | 'pending' => {
-    const bridgeCalcs = calculations.filter(c => c.bridgeId === bridge.id);
-    const uniqueSpanIndices = new Set(bridgeCalcs.map(c => c.spanIndex));
-    return uniqueSpanIndices.size >= bridge.spanCount ? 'calculated' : 'pending';
+    return getBridgeCoverage(bridge, calculations).status === 'complete' ? 'calculated' : 'pending';
   }, [calculations]);
 
   // 获取桥梁未计算的孔位
   const getPendingSpanIndices = useCallback((bridge: Bridge): number[] => {
-    const bridgeCalcs = calculations.filter(c => c.bridgeId === bridge.id);
-    const calculatedIndices = new Set(bridgeCalcs.map(c => c.spanIndex));
+    const calculatedIndices = new Set(calculations.filter(c => c.bridgeId === bridge.id).map(c => c.spanIndex));
     return bridge.spans
-      .filter(span => !calculatedIndices.has(span.index))
+      .filter(span => isSpanSupported(span) && !calculatedIndices.has(span.index))
       .map(span => span.index);
   }, [calculations]);
 
@@ -203,6 +200,20 @@ export default function KValueCalculation({ dataRefresh, onCalculate }: KValueCa
     onCalculate(bridge);
   };
 
+  const handleDeleteBridge = async (bridge: Bridge) => {
+    const result = await deleteBridge(bridge.id);
+    setSelectedBridgeId((current) => current === bridge.id ? null : current);
+    setSelectedCalculation((current) => current?.bridgeId === bridge.id ? null : current);
+    setSelectedBridge((current) => current?.id === bridge.id ? null : current);
+    handleCloseDetailModal();
+    setToast({
+      message: `桥梁“${bridge.bridgeName}”已删除，同时清理 ${result.deletedCalculations} 条计算记录`,
+      type: 'success',
+    });
+    await loadData();
+    return result;
+  };
+
   // 获取上一期计算结果（用于对比）
   const getPreviousCalculation = useCallback((bridgeId: string, currentCalcId: string): KValueCalculationType | undefined => {
     return calculations
@@ -225,9 +236,19 @@ export default function KValueCalculation({ dataRefresh, onCalculate }: KValueCa
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {/* 页面标题 */}
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-800">K值计算</h2>
-        <p className="text-sm text-gray-500 mt-1">桥梁列表、K值计算与结果管理</p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-800">K值计算</h2>
+          <p className="text-sm text-gray-500 mt-1">桥梁列表、K值计算与结果管理</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsCreateDrawerOpen(true)}
+          className="flex shrink-0 items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
+        >
+          <Plus className="h-4 w-4" />
+          新建桥梁
+        </button>
       </div>
 
       {/* 搜索和筛选 */}
@@ -336,6 +357,7 @@ export default function KValueCalculation({ dataRefresh, onCalculate }: KValueCa
           bridge={selectedBridge}
           isOpen={true}
           onClose={handleCloseResultModal}
+          onOpenReport={onOpenReport}
           previousCalculation={getPreviousCalculation(selectedBridge.id, selectedCalculation.id)}
         />
       )}
@@ -346,7 +368,27 @@ export default function KValueCalculation({ dataRefresh, onCalculate }: KValueCa
         isOpen={isDetailModalOpen}
         onClose={handleCloseDetailModal}
         onCalculate={handleCalculateFromDetail}
+        onDelete={handleDeleteBridge}
+        onViewResult={(calculation, bridge) => {
+          setSelectedCalculation(calculation);
+          setSelectedBridge(bridge);
+          setIsDetailModalOpen(false);
+        }}
+        onViewReport={(calcId) => {
+          setIsDetailModalOpen(false);
+          onOpenReport?.(calcId);
+        }}
         dataRefresh={dataRefresh}
+      />
+
+      <CreateBridgeDrawer
+        isOpen={isCreateDrawerOpen}
+        onClose={() => setIsCreateDrawerOpen(false)}
+        onCreated={(bridge) => {
+          setIsCreateDrawerOpen(false);
+          setToast({ message: `桥梁“${bridge.bridgeName}”创建成功`, type: 'success' });
+          loadData();
+        }}
       />
 
       {/* Toast 提示 */}

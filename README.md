@@ -6,8 +6,8 @@
 [![Node.js](https://img.shields.io/badge/Node.js-18+-339933?logo=nodedotjs)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/License-Private-ff69b4)]()
 
-**版本**: v1.0.0  
-**更新日期**: 2026-05-28  
+**版本**: v1.1.0
+**更新日期**: 2026-05-30
 **适用范围**: 朔黄铁路桥梁检定承载系数计算与管理
 
 面向朔黄铁路等场景的桥梁**检定承载系数（K 值）**计算与记录管理：React 前端 + Node.js REST API，数据以 JSON 文件持久化。
@@ -17,6 +17,7 @@
 ## 功能概览
 
 - **首页仪表盘**：统计卡片（桥梁总数、待计算桥梁、K 值偏低桥梁、本月到期桥梁）、最近计算记录列表、即将到期检定桥梁列表、K 值分布饼图、计算趋势折线图
+- **桥梁档案维护**：在 K 值计算页新建桥梁，按分段录入孔跨；详情弹窗支持输入桥名确认后级联删除桥梁、计算历史与报告
 - **K 值计算**：按选定孔跨发起计算，支持弯矩、偏载系数、K1～K5 分项与最小值计算，支持损伤修正系数
 - **计算历史**：查看、对比历史计算记录，支持报告生成与预览
 - **统计分析**：K 值分布统计、桥梁状态分析、时间趋势分析、梁型分布统计、线路分布统计、损伤因子统计、详细数据表格
@@ -124,6 +125,7 @@ Bridge-K-value-Calculation-Workbench/
 │   │   ├── Header.tsx           # 顶部栏
 │   │   ├── BridgeCard.tsx       # 桥梁卡片
 │   │   ├── BridgeDetailModal.tsx    # 桥梁详情弹窗
+│   │   ├── CreateBridgeDrawer.tsx   # 新建桥梁抽屉
 │   │   ├── CalculationDrawer.tsx    # K值计算抽屉
 │   │   ├── CalculationResultModal.tsx   # 计算结果弹窗
 │   │   ├── ReportPreviewModal.tsx       # 报告预览弹窗
@@ -168,8 +170,10 @@ Bridge-K-value-Calculation-Workbench/
 ### 2. K 值计算（KValueCalculation）
 
 - **桥梁卡片列表**：展示所有桥梁信息，支持搜索筛选
+- **新建桥梁抽屉**：录入桥梁基本信息和孔跨分段，自动展开逐孔数据并生成孔数、孔跨式样
 - **快捷计算入口**：每座桥梁显示各孔跨计算状态，未计算的孔跨可一键发起计算
-- **桥梁详情弹窗**：查看桥梁完整信息和历史计算记录
+- **桥梁详情弹窗**：查看桥梁完整信息和历史计算记录；在 K 值计算页可输入完整桥名确认后删除桥梁
+- **级联删除**：删除桥梁时同步删除关联计算历史及嵌套报告，操作不可撤销
 - **计算抽屉（CalculationDrawer）**：
   - 选择计算孔跨
   - 配置计算参数：梁体位置（直线/曲线）、曲线半径、线梁偏心、道砟厚度、冲击系数
@@ -210,9 +214,9 @@ Bridge-K-value-Calculation-Workbench/
 
 | 文件 | 说明 | 结构 |
 |------|------|------|
-| `bridges.json` | 桥梁基础信息与各孔 `spans[]`（含 `beamType`、`beamLength` 等） | 数组或 `{list: []}` |
+| `bridges.json` | 桥梁基础档案与各孔 `spans[]`（含 `beamType`、`beamLength` 等），支持页面新建与删除 | 数组或 `{list: []}` |
 | `fixed_params.json` | 按梁型图号配置的恒载内力、偏载表、材料与截面等 | `{version, spanTypes: {}}` |
-| `k_calculations.json` | K 值计算记录（`version` + `calculations` 数组） | `{version, calculations: []}` |
+| `k_calculations.json` | K 值计算记录（`version` + `calculations` 数组）；删除桥梁时按 `bridgeId` 级联清理 | `{version, calculations: []}` |
 
 ### 新增梁型配置
 
@@ -252,8 +256,12 @@ Bridge-K-value-Calculation-Workbench/
 | 方法 | 路径 | 说明 | 响应 |
 |------|------|------|------|
 | GET | `/api/bridges` | 获取桥梁列表 | `Bridge[]` |
+| POST | `/api/bridges` | 新建桥梁，服务端生成 ID、孔数和孔跨式样 | `Bridge` |
+| DELETE | `/api/bridges/:id` | 删除桥梁，并级联删除关联计算记录和报告 | `{ deleted, deletedCalculations }` |
 | GET | `/api/bridges/:id` | 获取桥梁详情 | `Bridge` |
 | GET | `/api/bridges/:id/calculations` | 获取某桥计算历史 | `KValueCalculation[]` |
+
+> `DELETE /api/bridges/:id` 为永久删除：同时清理 `k_calculations.json` 中相同 `bridgeId` 的计算记录及嵌套报告。前端仅在 K 值计算页的桥梁详情弹窗中提供该入口，并要求输入完整桥梁名称确认。
 
 ### 计算记录管理
 
@@ -457,6 +465,12 @@ CMD ["npm", "start"]
 ---
 
 ## 更新日志
+
+### v1.1.0 (2026-05-30)
+
+- ➕ 新增桥梁档案录入抽屉，支持按分段配置孔跨
+- 🗑️ 新增桥梁永久删除入口与完整桥名确认
+- 🔄 删除桥梁时级联清理关联计算记录和报告
 
 ### v1.0.0 (2026-05-28)
 

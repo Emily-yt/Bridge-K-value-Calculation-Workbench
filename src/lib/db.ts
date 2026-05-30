@@ -1,4 +1,4 @@
-import type { Bridge, KValueCalculation, KValueInput } from './types';
+import type { Bridge, CreateBridgeInput, DeleteBridgeResult, KValueCalculation, KValueInput, KValueOutput } from './types';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
@@ -32,6 +32,19 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
 
 export async function getBridges(): Promise<Bridge[]> {
   return apiRequest<Bridge[]>('/api/bridges');
+}
+
+export async function createBridge(input: CreateBridgeInput): Promise<Bridge> {
+  return apiRequest<Bridge>('/api/bridges', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deleteBridge(id: string): Promise<DeleteBridgeResult> {
+  return apiRequest<DeleteBridgeResult>(`/api/bridges/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
 }
 
 export async function getBridgeById(id: string): Promise<Bridge | null> {
@@ -85,7 +98,7 @@ export async function saveKValueResult(body: {
   bridgeId: string;
   spanIndex: number;
   input: KValueInput;
-  output: { k1: number; k2: number; k3: number; k4: number; kFinal: number; calcTime: string };
+  output: KValueOutput;
   intermediate?: { etaM?: number; momentM?: number; fixedParams?: Record<string, unknown> };
   creator?: string;
   creatorId?: string | null;
@@ -107,9 +120,8 @@ export async function deleteCalculation(id: string): Promise<boolean> {
   }
 }
 
-// 保存报告内容（HTML）
+// 保存报告人工填写内容
 export async function saveReport(id: string, data: {
-  htmlContent?: string;
   notes?: string;
   reviewer?: string;
 }): Promise<KValueCalculation> {

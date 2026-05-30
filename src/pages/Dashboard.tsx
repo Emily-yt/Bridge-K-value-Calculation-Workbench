@@ -16,6 +16,7 @@ import { getBridges, getCalculations } from '../lib/db';
 import type { Bridge, KValueCalculation } from '../lib/types';
 import BridgeDetailModal from '../components/BridgeDetailModal';
 import CalculationResultModal from '../components/CalculationResultModal';
+import { getBridgeCoverage, getKValueLevel as assessKValueLevel } from '../lib/kValueAssessment';
 
 // ============ K值等级常量定义 ============
 // 判定逻辑（四级分类）：
@@ -105,14 +106,6 @@ export default function Dashboard({
       
       const bridgeMap = new Map(bridges.map(b => [b.id, b]));
       
-      const bridgeCalculatedSpans = new Map<string, Set<number>>();
-      calculations.forEach(calc => {
-        if (!bridgeCalculatedSpans.has(calc.bridgeId)) {
-          bridgeCalculatedSpans.set(calc.bridgeId, new Set());
-        }
-        bridgeCalculatedSpans.get(calc.bridgeId)!.add(calc.spanIndex);
-      });
-      
       let pendingBridges = 0;
       let lowKValueBridges = 0;
       let dueThisMonth = 0;
@@ -121,27 +114,17 @@ export default function Dashboard({
       const thirtyDaysLater = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
       bridges.forEach(bridge => {
-        const calculatedSpans = bridgeCalculatedSpans.get(bridge.id);
-        const isComplete = calculatedSpans && calculatedSpans.size === bridge.spanCount;
+        const coverage = getBridgeCoverage(bridge, calculations);
+        const isComplete = coverage.status === 'complete';
         
         if (!isComplete) {
           pendingBridges++;
         }
         
-        const bridgeCalcs = calculations.filter(c => c.bridgeId === bridge.id);
+        const bridgeCalcs = coverage.latestSupportedCalculations;
         
         // 判定逻辑（考虑Q值）：检查桥梁是否有任何孔跨是 danger 状态
-        const hasDangerSpan = bridgeCalcs.some(calc => {
-          const k = calc.output.kFinal;
-          if (k >= 1.0) return false; // K>=1 是安全的
-          
-          // K<1 时检查Q值
-          const qResult = calc.output.qResult;
-          if (!qResult) return true; // 无Q值数据，视为不满足
-          
-          // Q值均不满足才算 danger
-          return !qResult.c80.meetsRequirement && !qResult.km98.meetsRequirement;
-        });
+        const hasDangerSpan = bridgeCalcs.some(calc => assessKValueLevel(calc.output.kFinal, calc.output.qResult) === 'danger');
         
         if (hasDangerSpan) {
           lowKValueBridges++;
@@ -258,42 +241,33 @@ export default function Dashboard({
           })),
         };
       case 'pending': {
-        const bridgeCalculatedSpans = new Map<string, Set<number>>();
-        calculations.forEach(calc => {
-          if (!bridgeCalculatedSpans.has(calc.bridgeId)) {
-            bridgeCalculatedSpans.set(calc.bridgeId, new Set());
-          }
-          bridgeCalculatedSpans.get(calc.bridgeId)!.add(calc.spanIndex);
-        });
         const pendingList = bridges.filter(bridge => {
-          const calculatedSpans = bridgeCalculatedSpans.get(bridge.id);
-          return !calculatedSpans || calculatedSpans.size < bridge.spanCount;
+          return getBridgeCoverage(bridge, calculations).status !== 'complete';
         });
         return {
           title: '待计算桥梁列表',
           list: pendingList.map(b => {
-            const calculated = bridgeCalculatedSpans.get(b.id)?.size || 0;
+            const coverage = getBridgeCoverage(b, calculations);
             return {
               id: b.id,
               name: b.bridgeName,
               line: b.lineName,
               mileage: b.centerMileage,
-              detail: `已计算 ${calculated}/${b.spanCount} 孔`,
+              detail: `${coverage.scopeText}${coverage.status === 'partial' ? '（阶段性）' : ''}`,
             };
           }),
         };
       }
       case 'lowK': {
         const lowKList = bridges.filter(bridge => {
-          const bridgeCalcs = calculations.filter(c => c.bridgeId === bridge.id);
+          const bridgeCalcs = getBridgeCoverage(bridge, calculations).latestSupportedCalculations;
           if (bridgeCalcs.length === 0) return false;
-          const minKValue = Math.min(...bridgeCalcs.map(c => c.output.kFinal));
-          return minKValue < 1.0;
+          return bridgeCalcs.some(c => assessKValueLevel(c.output.kFinal, c.output.qResult) === 'danger');
         });
         return {
           title: 'K值不满足要求桥梁列表',
           list: lowKList.map(b => {
-            const bridgeCalcs = calculations.filter(c => c.bridgeId === b.id);
+            const bridgeCalcs = getBridgeCoverage(b, calculations).latestSupportedCalculations;
             const minKValue = Math.min(...bridgeCalcs.map(c => c.output.kFinal));
             return {
               id: b.id,
@@ -444,25 +418,7 @@ export default function Dashboard({
     
     // 获取K值等级（考虑Q值）- 四级分类
     const getLevel = (kFinal: number, qResult?: KValueCalculation['output']['qResult']) => {
-      // K >= 1.0 直接满足
-      if (kFinal >= 1.0) return 'safe';
-      
-      // K < 1.0 时需要检查Q值
-      if (!qResult) return 'danger';
-      
-      const c80Ok = qResult.c80.meetsRequirement;
-      const km98Ok = qResult.km98.meetsRequirement;
-      
-      if (c80Ok && km98Ok) {
-        // Q值均满足
-        return 'safe';
-      } else if (c80Ok || km98Ok) {
-        // 有且仅有1个不满足
-        return 'partial';
-      } else {
-        // Q值均不满足
-        return 'danger';
-      }
+      return assessKValueLevel(kFinal, qResult);
     };
     
     if (selectedBridgeForDistribution === 'all') {
@@ -473,7 +429,7 @@ export default function Dashboard({
       let dangerCount = 0;
       
       bridges.forEach((bridge) => {
-        const bridgeCalcs = filteredCalculations.filter((c) => c.bridgeId === bridge.id);
+        const bridgeCalcs = getBridgeCoverage(bridge, filteredCalculations).latestSupportedCalculations;
         if (bridgeCalcs.length === 0) return;
         
         // 找到最小K值的计算记录
@@ -750,12 +706,12 @@ export default function Dashboard({
           </div>
         </div>
 
-        {/* 即将到期检定卡片 */}
+        {/* 下次检定时间卡片 */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm h-[300px] flex flex-col">
           <div className="px-5 py-4 border-b border-gray-100 flex items-center flex-shrink-0">
             <div className="flex items-center gap-2">
               <AlertCircle className="w-5 h-5 text-orange-500" />
-              <h3 className="font-semibold text-gray-800">即将到期检定</h3>
+              <h3 className="font-semibold text-gray-800">下次检定时间</h3>
             </div>
           </div>
           <div className="flex-1 overflow-y-auto">
@@ -1106,6 +1062,15 @@ export default function Dashboard({
         onCalculate={(bridge) => {
           setSelectedBridgeForDetail(null);
           onCalculate?.(bridge);
+        }}
+        onViewResult={(calculation, bridge) => {
+          setSelectedBridgeForDetail(null);
+          setSelectedCalculation(calculation);
+          setCalculationBridge(bridge);
+        }}
+        onViewReport={(calcId) => {
+          setSelectedBridgeForDetail(null);
+          onOpenReport?.(calcId);
         }}
         dataRefresh={dataRefresh}
       />

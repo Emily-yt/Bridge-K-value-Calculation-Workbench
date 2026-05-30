@@ -21,6 +21,24 @@ export interface Bridge {
   operationStatus: string;
 }
 
+/** 新建桥梁请求参数，派生字段由后端统一生成 */
+export interface CreateBridgeInput {
+  bridgeName: string;
+  lineName: string;
+  bridgeNo: string;
+  centerMileage: string;
+  buildYear: number;
+  operationStatus: '运营中' | '已停用';
+  structureType: string;
+  spans: BeamSpan[];
+}
+
+/** 删除桥梁后的级联删除统计 */
+export interface DeleteBridgeResult {
+  deleted: true;
+  deletedCalculations: number;
+}
+
 /** 损伤修正系数（与后端 input.damageFactors 一致） */
 export interface DamageFactors {
   z1m: number;
@@ -71,7 +89,6 @@ export interface CalculationReport {
   generated: boolean;
   filePath: string | null;
   generateTime: string | null;
-  htmlContent?: string;
   notes?: string;
   reviewer?: string;
 }

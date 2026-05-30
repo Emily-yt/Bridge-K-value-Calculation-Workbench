@@ -2,115 +2,12 @@
   "version": "1.0",
   "calculations": [
     {
-      "id": "CALC17793844719326y3xms",
-      "bridgeId": "BRG001",
-      "spanIndex": 3,
-      "spanLength": 32,
-      "beamType": "专桥2059",
-      "createTime": "2026-05-22T01:27:51.932+08:00",
-      "creator": "当前用户",
-      "creatorId": null,
-      "input": {
-        "beamPosition": "直线梁",
-        "curveRadius": null,
-        "eccentricityE": 0,
-        "ballastThicknessT": 5,
-        "impactFactor": 1.1935,
-        "damageFactors": {
-          "z1m": 1,
-          "z1q": 1,
-          "z2m": 1,
-          "z2q": 1,
-          "z3h": 1,
-          "z3y": 1,
-          "z4y": 1
-        }
-      },
-      "intermediate": {
-        "etaM": 1,
-        "momentM": 15188.436,
-        "fixedParams": {
-          "mq0": 4248,
-          "mq1": 2367.2,
-          "mq2": 811.9,
-          "mq3": 497.7,
-          "mL": 6294.5,
-          "sigma_q0": -6.52,
-          "sigma_q1": -3.211,
-          "sigma_q2": -0.948,
-          "sigma_q3": -0.675,
-          "sigma_L": -8.539,
-          "sigma_pc_mid": 20.956,
-          "etaM": 1,
-          "tau_q0": -1.197,
-          "tau_q1": -0.667,
-          "tau_q2": -0.197,
-          "tau_q3": -0.14,
-          "tau_L": -1.752,
-          "tau_pc_l8": 1.262,
-          "etaM_l8": 1,
-          "etaQ_l8": 1,
-          "sigma_q0_lh": -1.692,
-          "sigma_q1_lh": -0.838,
-          "sigma_q2_lh": -0.247,
-          "sigma_q3_lh": -0.176,
-          "sigma_L_lh": -2.468,
-          "tau_q0_lh": -1.039,
-          "tau_q1_lh": -0.593,
-          "tau_q2_lh": -0.175,
-          "tau_q3_lh": -0.125,
-          "tau_L_lh": -1.558,
-          "sigma_pc_lh": 13.04,
-          "tau_pc_lh": 1.087,
-          "mp": 29752,
-          "Kw": 2,
-          "K_crack": 1.2,
-          "fct": 3.02,
-          "fc": 32.1,
-          "gamma": 1.3234,
-          "damageFactors": {
-            "z1m": 1,
-            "z1q": 1,
-            "z2m": 1,
-            "z2q": 1,
-            "z3h": 1,
-            "z3y": 1,
-            "z4y": 1
-          }
-        }
-      },
-      "output": {
-        "k1": 0.9584,
-        "k2": 3.1213,
-        "k3": 3.1372,
-        "k4": 4.2324,
-        "k5": 2.706,
-        "kFinal": 0.9584,
-        "qResult": {
-          "c80": {
-            "q": 0.8778,
-            "meetsRequirement": true
-          },
-          "km98": {
-            "q": 0.8967,
-            "meetsRequirement": true
-          }
-        },
-        "calcTime": "2026-05-22T01:27:51.932+08:00"
-      },
-      "report": {
-        "generated": false,
-        "filePath": null,
-        "generateTime": null
-      }
-    },
-    {
-      "id": "CALC17793839732619w56p9",
+      "id": "CALC1780132956334u5gg9d",
       "bridgeId": "BRG003",
       "spanIndex": 3,
       "spanLength": 32,
       "beamType": "专桥2059",
-      "createTime": "2026-05-22T01:19:33.261+08:00",
+      "createTime": "2026-05-30T17:22:36.334+08:00",
       "creator": "当前用户",
       "creatorId": null,
       "input": {
@@ -149,7 +46,7 @@
           "tau_q1": -0.667,
           "tau_q2": -0.197,
           "tau_q3": -0.14,
-          "tau_L": -1.752,
+          "tau_L": -2.198,
           "tau_pc_l8": 1.262,
           "etaM_l8": 1.052,
           "etaQ_l8": 1.044,
@@ -163,8 +60,21 @@
           "tau_q2_lh": -0.175,
           "tau_q3_lh": -0.125,
           "tau_L_lh": -1.558,
+          "sigma_q0_lh_vMin": -1.692,
+          "sigma_q1_lh_vMin": -0.838,
+          "sigma_q2_lh_vMin": -0.247,
+          "sigma_q3_lh_vMin": -0.176,
+          "sigma_L_lh_vMin": -2.37,
+          "tau_q0_lh_vMin": -1.039,
+          "tau_q1_lh_vMin": -0.593,
+          "tau_q2_lh_vMin": -0.175,
+          "tau_q3_lh_vMin": -0.125,
+          "tau_L_lh_vMin": -1.956,
           "sigma_pc_lh": 13.04,
           "tau_pc_lh": 1.087,
+          "k5MMaxLowerHaunch": 1.458282470703125,
+          "k5VMinLowerHaunch": 1.2610244750976562,
+          "k5ControlCase": "Vmin下梗腋",
           "mp": 29752,
           "Kw": 2,
           "K_crack": 1.2,
@@ -179,15 +89,25 @@
             "z3h": 1,
             "z3y": 1,
             "z4y": 1
-          }
+          },
+          "momentM": 15752.8101515,
+          "sigmaMidTotal": -21.973330953,
+          "tauL8Total": -4.939738772,
+          "liveLoadMoment": 7828.010151500001,
+          "liveLoadSigmaMid": -10.619330953,
+          "liveLoadTauL8": -2.738738772,
+          "liveLoadSigmaLh": -3.0987270160000002,
+          "liveLoadTauLh": -1.941289812,
+          "liveLoadSigmaLhVMin": -2.9756819400000003,
+          "liveLoadTauLhVMin": -2.437203384
         }
       },
       "output": {
         "k1": 0.888,
-        "k2": 3.0273,
-        "k3": 3.0426,
-        "k4": 4.0861,
-        "k5": 2.5653,
+        "k2": 0.8889,
+        "k3": 0.9042,
+        "k4": 1.6497,
+        "k5": 1.261,
         "kFinal": 0.888,
         "qResult": {
           "c80": {
@@ -199,7 +119,7 @@
             "meetsRequirement": false
           }
         },
-        "calcTime": "2026-05-22T01:19:33.261+08:00"
+        "calcTime": "2026-05-30T17:22:36.334+08:00"
       },
       "report": {
         "generated": false,
@@ -208,18 +128,18 @@
       }
     },
     {
-      "id": "CALC17793839616449i29lm",
+      "id": "CALC1780132941310ji13qx",
       "bridgeId": "BRG002",
       "spanIndex": 3,
       "spanLength": 32,
       "beamType": "专桥2059",
-      "createTime": "2026-05-22T01:19:21.644+08:00",
+      "createTime": "2026-05-30T17:22:21.310+08:00",
       "creator": "当前用户",
       "creatorId": null,
       "input": {
         "beamPosition": "直线梁",
         "curveRadius": null,
-        "eccentricityE": 0,
+        "eccentricityE": 100,
         "ballastThicknessT": 5,
         "impactFactor": 1.1935,
         "damageFactors": {
@@ -233,8 +153,8 @@
         }
       },
       "intermediate": {
-        "etaM": 1,
-        "momentM": 15188.436,
+        "etaM": 1.060375,
+        "momentM": 15642.002,
         "fixedParams": {
           "mq0": 4248,
           "mq1": 2367.2,
@@ -247,15 +167,15 @@
           "sigma_q3": -0.675,
           "sigma_L": -8.539,
           "sigma_pc_mid": 20.956,
-          "etaM": 1,
+          "etaM": 1.060375,
           "tau_q0": -1.197,
           "tau_q1": -0.667,
           "tau_q2": -0.197,
           "tau_q3": -0.14,
-          "tau_L": -1.752,
+          "tau_L": -2.198,
           "tau_pc_l8": 1.262,
-          "etaM_l8": 1,
-          "etaQ_l8": 1,
+          "etaM_l8": 1.07675,
+          "etaQ_l8": 1.063875,
           "sigma_q0_lh": -1.692,
           "sigma_q1_lh": -0.838,
           "sigma_q2_lh": -0.247,
@@ -266,8 +186,21 @@
           "tau_q2_lh": -0.175,
           "tau_q3_lh": -0.125,
           "tau_L_lh": -1.558,
+          "sigma_q0_lh_vMin": -1.692,
+          "sigma_q1_lh_vMin": -0.838,
+          "sigma_q2_lh_vMin": -0.247,
+          "sigma_q3_lh_vMin": -0.176,
+          "sigma_L_lh_vMin": -2.37,
+          "tau_q0_lh_vMin": -1.039,
+          "tau_q1_lh_vMin": -0.593,
+          "tau_q2_lh_vMin": -0.175,
+          "tau_q3_lh_vMin": -0.125,
+          "tau_L_lh_vMin": -1.956,
           "sigma_pc_lh": 13.04,
           "tau_pc_lh": 1.087,
+          "k5MMaxLowerHaunch": 1.4591598510742188,
+          "k5VMinLowerHaunch": 1.2621688842773438,
+          "k5ControlCase": "Vmin下梗腋",
           "mp": 29752,
           "Kw": 2,
           "K_crack": 1.2,
@@ -282,16 +215,26 @@
             "z3h": 1,
             "z3y": 1,
             "z4y": 1
-          }
+          },
+          "momentM": 15642.002077156252,
+          "sigmaMidTotal": -21.8230960261875,
+          "tauL8Total": -4.921877117874999,
+          "liveLoadMoment": 7966.0520771562515,
+          "liveLoadSigmaMid": -10.806596026187501,
+          "liveLoadTauL8": -2.7908771178749996,
+          "liveLoadSigmaLh": -3.1716295765000004,
+          "liveLoadTauLh": -1.9782468378749998,
+          "liveLoadSigmaLhVMin": -3.0456896662500004,
+          "liveLoadTauLhVMin": -2.4836012932499996
         }
       },
       "output": {
-        "k1": 0.9584,
-        "k2": 3.1213,
-        "k3": 3.1372,
-        "k4": 4.2324,
-        "k5": 2.706,
-        "kFinal": 0.9584,
+        "k1": 0.9038,
+        "k2": 0.9048,
+        "k3": 0.9198,
+        "k4": 1.6439,
+        "k5": 1.2622,
+        "kFinal": 0.9038,
         "qResult": {
           "c80": {
             "q": 0.8778,
@@ -302,7 +245,7 @@
             "meetsRequirement": true
           }
         },
-        "calcTime": "2026-05-22T01:19:21.644+08:00"
+        "calcTime": "2026-05-30T17:22:21.310+08:00"
       },
       "report": {
         "generated": false,
@@ -311,12 +254,12 @@
       }
     },
     {
-      "id": "CALC17793773542262kd3lw",
+      "id": "CALC1780132912663ahxa0e",
       "bridgeId": "BRG001",
-      "spanIndex": 5,
+      "spanIndex": 1,
       "spanLength": 32,
       "beamType": "专桥2059",
-      "createTime": "2026-05-21T23:29:14.226+08:00",
+      "createTime": "2026-05-30T17:21:52.663+08:00",
       "creator": "当前用户",
       "creatorId": null,
       "input": {
@@ -355,7 +298,7 @@
           "tau_q1": -0.667,
           "tau_q2": -0.197,
           "tau_q3": -0.14,
-          "tau_L": -1.752,
+          "tau_L": -2.198,
           "tau_pc_l8": 1.262,
           "etaM_l8": 1.052,
           "etaQ_l8": 1.044,
@@ -369,8 +312,21 @@
           "tau_q2_lh": -0.175,
           "tau_q3_lh": -0.125,
           "tau_L_lh": -1.558,
+          "sigma_q0_lh_vMin": -1.692,
+          "sigma_q1_lh_vMin": -0.838,
+          "sigma_q2_lh_vMin": -0.247,
+          "sigma_q3_lh_vMin": -0.176,
+          "sigma_L_lh_vMin": -2.37,
+          "tau_q0_lh_vMin": -1.039,
+          "tau_q1_lh_vMin": -0.593,
+          "tau_q2_lh_vMin": -0.175,
+          "tau_q3_lh_vMin": -0.125,
+          "tau_L_lh_vMin": -1.956,
           "sigma_pc_lh": 13.04,
           "tau_pc_lh": 1.087,
+          "k5MMaxLowerHaunch": 1.4891815185546875,
+          "k5VMinLowerHaunch": 1.2877273559570312,
+          "k5ControlCase": "Vmin下梗腋",
           "mp": 29752,
           "Kw": 2,
           "K_crack": 1.2,
@@ -385,15 +341,25 @@
             "z3h": 1,
             "z3y": 1,
             "z4y": 1
-          }
+          },
+          "momentM": 15503.9601515,
+          "sigmaMidTotal": -21.635830953000003,
+          "tauL8Total": -4.869738772,
+          "liveLoadMoment": 7828.010151500001,
+          "liveLoadSigmaMid": -10.619330953,
+          "liveLoadTauL8": -2.738738772,
+          "liveLoadSigmaLh": -3.0987270160000002,
+          "liveLoadTauLh": -1.941289812,
+          "liveLoadSigmaLhVMin": -2.9756819400000003,
+          "liveLoadTauLhVMin": -2.437203384
         }
       },
       "output": {
         "k1": 0.9198,
-        "k2": 2.9955,
-        "k3": 3.0108,
-        "k4": 4.054,
-        "k5": 2.5989,
+        "k2": 0.9207,
+        "k3": 0.936,
+        "k4": 1.6752,
+        "k5": 1.2877,
         "kFinal": 0.9198,
         "qResult": {
           "c80": {
@@ -405,7 +371,7 @@
             "meetsRequirement": true
           }
         },
-        "calcTime": "2026-05-21T23:29:14.226+08:00"
+        "calcTime": "2026-05-30T17:21:52.663+08:00"
       },
       "report": {
         "generated": false,

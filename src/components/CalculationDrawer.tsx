@@ -1,13 +1,9 @@
 import { useState, useEffect } from 'react';
 import { X, RotateCcw, Play, ChevronDown, ChevronUp, Calculator, CheckCircle, AlertTriangle, XCircle, FileText, Save } from 'lucide-react';
-import type { Bridge, KValueCalculation, BeamSpan } from '../lib/types';
+import type { Bridge, KValueCalculation } from '../lib/types';
 import { calculateKValue, saveKValueResult } from '../lib/db';
 import { QValueTooltip } from './QValueTooltip';
-
-// 验证桥孔是否支持计算
-function isSpanSupported(span: BeamSpan): boolean {
-  return span.beamType === '专桥2059' && span.beamLength === 32.6;
-}
+import { getAssessmentText, getKValueLevel, isSpanSupported } from '../lib/kValueAssessment';
 
 // Toast 提示组件
 function Toast({ message, type, onClose }: { message: string; type: 'warning' | 'error' | 'info'; onClose: () => void }) {
@@ -45,20 +41,10 @@ type CalculationPhase = 'input' | 'calculating' | 'result';
 // 1. K >= 1：满足"中-活载"要求
 // 2. K < 1：需计算Q值，若 Q < K 则满足运行列车要求
 function getKValueStatus(k: number, qResult?: { c80: { meetsRequirement: boolean }; km98: { meetsRequirement: boolean } } | null) {
-  if (k >= 1.0) {
-    return { label: '满足要求', color: 'green', icon: CheckCircle, text: '满足中-活载要求' };
-  }
-  // K < 1 时，检查Q值
-  if (qResult) {
-    const c80Meets = qResult.c80.meetsRequirement;
-    const km98Meets = qResult.km98.meetsRequirement;
-    if (c80Meets && km98Meets) {
-      return { label: '满足要求', color: 'green', icon: CheckCircle, text: '满足要求' };
-    } else if (c80Meets || km98Meets) {
-      return { label: '部分满足', color: 'orange', icon: AlertTriangle, text: '部分满足' };
-    }
-  }
-  return { label: '不满足', color: 'red', icon: XCircle, text: '不满足运营要求，需立即处理' };
+  const level = getKValueLevel(k, qResult);
+  if (level === 'safe') return { label: '满足要求', color: 'green', icon: CheckCircle, text: getAssessmentText(k, qResult) };
+  if (level === 'partial') return { label: '部分满足', color: 'orange', icon: AlertTriangle, text: getAssessmentText(k, qResult) };
+  return { label: '不满足', color: 'red', icon: XCircle, text: getAssessmentText(k, qResult) };
 }
 
 // 颜色配置
