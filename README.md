@@ -6,7 +6,7 @@
 [![Node.js](https://img.shields.io/badge/Node.js-18+-339933?logo=nodedotjs)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/License-Private-ff69b4)]()
 
-**版本**: v1.1.0
+**版本**: v1.2.0
 **更新日期**: 2026-05-30
 **适用范围**: 朔黄铁路桥梁检定承载系数计算与管理
 
@@ -40,6 +40,7 @@
 | 后端框架 | Express | 5.2+ | REST API 服务 |
 | 数据存储 | JSON 文件 | - | 本地文件持久化 |
 | 开发工具 | concurrently | 9.1+ | 并行运行脚本 |
+| 测试框架 | Node.js Test Runner | 18+ | 单元测试 |
 
 ---
 
@@ -110,14 +111,8 @@ Bridge-K-value-Calculation-Workbench/
 ├── server/                        # 后端服务
 │   ├── index.mjs                 # Express 入口与路由
 │   └── kValueEngine.mjs          # K 值计算核心引擎
-├── docs/                          # 设计与算法说明文档
-│   ├── K值计算逻辑.md
-│   ├── 后端设计.md
-│   ├── 页面布局设计.md
-│   └── ...
+├── docs/                          # 设计与算法说明文档（已排除在版本控制外）
 ├── public/                        # 静态资源
-│   └── icons/
-│       └── bridge.svg
 ├── src/                           # React 前端源码
 │   ├── components/               # 可复用组件
 │   │   ├── Sidebar.tsx          # 侧边栏导航
@@ -136,12 +131,14 @@ Bridge-K-value-Calculation-Workbench/
 │   │   └── Statistics.tsx       # 统计分析页面
 │   ├── lib/                      # 工具库
 │   │   ├── types.ts             # TypeScript 类型定义
-│   │   └── db.ts                # 数据操作（API 封装）
+│   │   ├── db.ts                # 数据操作（API 封装）
+│   │   └── kValueAssessment.ts  # K值评估与判定逻辑
 │   ├── static/                   # 静态资源
 │   │   └── logo.png
 │   ├── App.tsx                   # 应用入口
 │   ├── main.tsx                  # React 挂载点
 │   └── index.css                 # 全局样式
+├── tests/                        # 测试文件
 ├── .gitignore
 ├── README.md
 ├── eslint.config.js
@@ -170,8 +167,9 @@ Bridge-K-value-Calculation-Workbench/
 ### 2. K 值计算（KValueCalculation）
 
 - **桥梁卡片列表**：展示所有桥梁信息，支持搜索筛选
-- **新建桥梁抽屉**：录入桥梁基本信息和孔跨分段，自动展开逐孔数据并生成孔数、孔跨式样
+- **新建桥梁抽屉**：录入桥梁基本信息和孔跨分段，自动展开逐孔数据并生成孔数、孔跨式样；支持多段式孔跨配置（如 3-32m + 2-24m）
 - **快捷计算入口**：每座桥梁显示各孔跨计算状态，未计算的孔跨可一键发起计算
+- **K值评估模块**：支持四级判定逻辑（安全/部分满足/危险），综合考虑K值和Q值（运营列车荷载系数）
 - **桥梁详情弹窗**：查看桥梁完整信息和历史计算记录；在 K 值计算页可输入完整桥名确认后删除桥梁
 - **级联删除**：删除桥梁时同步删除关联计算历史及嵌套报告，操作不可撤销
 - **计算抽屉（CalculationDrawer）**：
@@ -375,6 +373,7 @@ $$\tau = \tau_{q0} + \tau_{q1} + \tau_{q2} + \frac{t}{10} \times \tau_{q3} + (1+
 | `npm run preview` | 预览构建结果（不含后端） | 测试 |
 | `npm run typecheck` | TypeScript 类型检查 | 开发 |
 | `npm run lint` | ESLint 代码检查 | 开发 |
+| `npm run test:assessment` | 运行 K值评估模块单元测试 | 开发 |
 
 ---
 
@@ -451,20 +450,26 @@ CMD ["npm", "start"]
 
 ## 相关文档
 
-| 文档 | 说明 |
-|------|------|
-| [docs/K值计算逻辑.md](docs/K值计算逻辑.md) | K值计算详细算法说明 |
-| [docs/后端设计.md](docs/后端设计.md) | 后端架构与数据设计 |
-| [docs/页面布局设计.md](docs/页面布局设计.md) | UI布局与交互设计 |
-| [docs/K值计算交互设计文档.md](docs/K值计算交互设计文档.md) | 交互流程说明 |
-| [docs/桥梁K值统计页面设计方案.md](docs/桥梁K值统计页面设计方案.md) | 统计页面设计 |
-| [docs/桥梁列表卡片设计说明.md](docs/桥梁列表卡片设计说明.md) | 桥梁卡片组件设计 |
-| [docs/设置页功能设计.md](docs/设置页功能设计.md) | 设置功能设计 |
-| [docs/用户数据表设计.md](docs/用户数据表设计.md) | 数据结构定义 |
+| 文档 | 说明 | 位置 |
+|------|------|------|
+| K值计算逻辑 | K值计算详细算法说明 | `docs/` 目录（本地） |
+| 后端设计 | 后端架构与数据设计 | `docs/` 目录（本地） |
+| 页面布局设计 | UI布局与交互设计 | `docs/` 目录（本地） |
+| K值计算交互设计 | 交互流程说明 | `docs/` 目录（本地） |
+| 统计页面设计 | 统计页面设计方案 | `docs/` 目录（本地） |
+
+> **注意**：`docs/` 目录已排除在 Git 版本控制外，相关文档仅在本地维护。
 
 ---
 
 ## 更新日志
+
+### v1.2.0 (2026-05-30)
+
+- ➕ 新增 K值评估模块 (`kValueAssessment.ts`)，支持四级判定逻辑
+- 📊 优化 K值计算结果展示，增加控制项识别
+- 🔧 新增单元测试支持 (`test:assessment` 脚本)
+- 📝 更新 README 文档结构
 
 ### v1.1.0 (2026-05-30)
 
