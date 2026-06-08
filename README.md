@@ -6,8 +6,8 @@
 [![Node.js](https://img.shields.io/badge/Node.js-18+-339933?logo=nodedotjs)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/License-Private-ff69b4)]()
 
-**版本**: v1.2.0
-**更新日期**: 2026-05-30
+**版本**: v1.2.1
+**更新日期**: 2026-06-08
 **适用范围**: 朔黄铁路桥梁检定承载系数计算与管理
 
 面向朔黄铁路等场景的桥梁**检定承载系数（K 值）**计算与记录管理：React 前端 + Node.js REST API，数据以 JSON 文件持久化。
@@ -22,6 +22,7 @@
 - **计算历史**：查看、对比历史计算记录，支持报告生成与预览
 - **统计分析**：K 值分布统计、桥梁状态分析、时间趋势分析、梁型分布统计、线路分布统计、损伤因子统计、详细数据表格
 - **预警提醒**：即将到期检定桥梁提醒，K 值偏低预警
+- **访问门禁**：前端单密码登录页，使用 `VITE_APP_PASSWORD` 配置访问密码，刷新页面后本次会话保持登录状态
 
 详细业务与公式说明见仓库内 **`docs/`** 目录（《后端设计说明》《K 值计算逻辑说明》《页面布局设计》等）。
 
@@ -64,7 +65,23 @@ cd Bridge-K-value-Calculation-Workbench
 npm install
 ```
 
-### 2. 启动开发环境
+### 2. 配置访问密码
+
+项目启用了单密码登录页。首次启动前请复制环境变量示例并设置访问密码：
+
+```bash
+cp .env.example .env
+```
+
+然后编辑 `.env`：
+
+```bash
+VITE_APP_PASSWORD=你的访问密码
+```
+
+> 说明：`VITE_APP_PASSWORD` 会被 Vite 打包到前端产物中，仅适合作为内部工具或演示环境的轻量门禁，不等同于服务端安全认证。
+
+### 3. 启动开发环境
 
 **推荐方式（一条命令启动前后端）：**
 
@@ -86,7 +103,7 @@ npm run server
 npm run dev
 ```
 
-### 3. 生产部署
+### 4. 生产部署
 
 ```bash
 # 构建前端
@@ -115,6 +132,7 @@ Bridge-K-value-Calculation-Workbench/
 ├── public/                        # 静态资源
 ├── src/                           # React 前端源码
 │   ├── components/               # 可复用组件
+│   │   ├── LoginPage.tsx        # 单密码登录页
 │   │   ├── Sidebar.tsx          # 侧边栏导航
 │   │   ├── MobileNav.tsx        # 移动端底部导航
 │   │   ├── Header.tsx           # 顶部栏
@@ -403,6 +421,7 @@ $$\tau = \tau_{q0} + \tau_{q1} + \tau_{q2} + \frac{t}{10} \times \tau_{q3} + (1+
 | 变量名 | 默认值 | 说明 |
 |--------|--------|------|
 | `PORT` | `3000` | 后端服务端口 |
+| `VITE_APP_PASSWORD` | - | 前端登录页访问密码；未配置时登录页会禁止进入系统 |
 
 ---
 
@@ -414,10 +433,14 @@ $$\tau = \tau_{q0} + \tau_{q1} + \tau_{q2} + \frac{t}{10} \times \tau_{q3} + (1+
 # 1. 安装依赖
 npm install
 
-# 2. 构建前端
+# 2. 配置访问密码
+cp .env.example .env
+# 编辑 .env 中的 VITE_APP_PASSWORD
+
+# 3. 构建前端
 npm run build
 
-# 3. 启动服务
+# 4. 启动服务
 npm start
 ```
 
@@ -428,6 +451,8 @@ npm start
 ```bash
 # 安装 Vercel CLI
 npm i -g vercel
+
+# 在 Vercel 项目环境变量中配置 VITE_APP_PASSWORD
 
 # 部署
 vercel --prod
@@ -463,6 +488,12 @@ CMD ["npm", "start"]
 ---
 
 ## 更新日志
+
+### v1.2.1 (2026-06-08)
+
+- 🔐 新增单密码登录页，未验证前不可进入工作台
+- ⚙️ 新增 `VITE_APP_PASSWORD` 环境变量与 `.env.example` 示例
+- 🧹 清理一个未使用导入，确保 TypeScript 类型检查通过
 
 ### v1.2.0 (2026-05-30)
 

@@ -4,12 +4,16 @@ import Sidebar, { type ViewId } from './components/Sidebar';
 import MobileNav from './components/MobileNav';
 import CalculationDrawer from './components/CalculationDrawer';
 import ReportPreviewModal from './components/ReportPreviewModal';
+import LoginPage from './components/LoginPage';
 import Dashboard from './pages/Dashboard';
 import KValueCalculation from './pages/KValueCalculation';
 import Statistics from './pages/Statistics';
 import type { Bridge } from './lib/types';
 
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(
+    () => sessionStorage.getItem('bridge-authenticated') === 'true'
+  );
   const [currentView, setCurrentView] = useState<ViewId>('dashboard');
   const [isCalcDrawerOpen, setIsCalcDrawerOpen] = useState(false);
   const [calcTargetBridge, setCalcTargetBridge] = useState<Bridge | null>(null);
@@ -60,6 +64,10 @@ function App() {
         return null;
     }
   };
+
+  if (!isAuthenticated) {
+    return <LoginPage onAuthenticated={() => setIsAuthenticated(true)} />;
+  }
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-gray-50">

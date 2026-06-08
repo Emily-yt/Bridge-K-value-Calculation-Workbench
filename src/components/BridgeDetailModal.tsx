@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { X, Plus, Calculator, FileText, Trash2, Info, History, AlertTriangle, Loader2, Eye, RotateCcw } from 'lucide-react';
 import type { Bridge, DeleteBridgeResult, KValueCalculation } from '../lib/types';
-import { getCalculationsByBridge, deleteCalculation, getBridgeById } from '../lib/db';
+import { getCalculationsByBridge, deleteCalculation } from '../lib/db';
 
 interface BridgeDetailModalProps {
   bridge: Bridge | null;
