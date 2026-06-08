@@ -1,6 +1,5 @@
 import { FormEvent, useState } from 'react';
 import { AlertCircle, LockKeyhole, ShieldCheck } from 'lucide-react';
-import logo from '../static/logo.png';
 
 interface LoginPageProps {
   onAuthenticated: () => void;
@@ -40,22 +39,6 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
 
       <main className="relative z-10 flex min-h-screen items-center justify-center px-5 py-10">
         <section className="w-full max-w-md animate-fade-in">
-          <div className="mb-6 flex justify-center">
-            <div className="flex items-center gap-3 rounded-2xl border border-white/70 bg-white/80 px-5 py-3 shadow-card backdrop-blur">
-              <div className="h-12 w-12 overflow-hidden rounded-xl">
-                <img src={logo} alt="桥梁图标" className="h-full w-full object-cover" />
-              </div>
-              <div>
-                <h1 className="text-lg font-bold tracking-tight text-gray-800">
-                  桥梁K值计算系统
-                </h1>
-                <p className="text-xs text-gray-500">
-                  Bridge K-value Calculation System
-                </p>
-              </div>
-            </div>
-          </div>
-
           <div className="rounded-2xl border border-gray-200 bg-white/95 p-7 shadow-xl backdrop-blur">
             <div className="mb-6 text-center">
               <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary-100 text-primary-600">
@@ -111,10 +94,6 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
                 进入系统
               </button>
             </form>
-
-            <p className="mt-5 text-center text-xs text-gray-400">
-              本验证用于内部访问门禁，不替代服务端安全认证。
-            </p>
           </div>
         </section>
       </main>
